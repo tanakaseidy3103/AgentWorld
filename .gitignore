@@ -12,3 +12,8 @@
 *.user
 *.pidb
 *.tmp
+/*.log
+/Assets/AgentWorld/Art*
+/Assets/AgentWorld/Prefabs*
+/Assets/AgentWorld/Scenes*
+/.vscode/
