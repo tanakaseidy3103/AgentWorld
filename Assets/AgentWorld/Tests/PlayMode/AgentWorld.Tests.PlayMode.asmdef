@@ -1,0 +1,7 @@
+{
+  "name": "AgentWorld.Tests.PlayMode",
+  "references": ["AgentWorld.Runtime", "UnityEngine.TestRunner"],
+  "overrideReferences": true,
+  "precompiledReferences": ["nunit.framework.dll"],
+  "defineConstraints": ["UNITY_INCLUDE_TESTS"]
+}
