@@ -210,9 +210,13 @@ Rules:
 - At most 6 actions.
 - Valid location ids: {string.Join(", ", locations)}. Never invent ids or coordinates.
 - If the requested place does not exist, choose the most sensible valid id and say so in a speak action.
-- {(Role == "builder" ? "To build, first move_to the location, then build there." : "You cannot build.")}
+- Include EVERY step needed to fully complete the request. {(Role == "builder" ? "Building only happens with a build action." : "You cannot build.")}
 - Write speak messages in the same language as the player's request.
-- Output JSON only.";
+- Output JSON only.
+Example request ""{(Role == "builder" ? "build a house by the plaza" : "check the plaza")}"" ->
+{(Role == "builder"
+    ? @"{""agent"":""builder"",""goal"":""Build a house near the plaza"",""actions"":[{""type"":""speak"",""message"":""On my way!""},{""type"":""move_to"",""target"":""plaza""},{""type"":""build"",""structure"":""house"",""location"":""plaza""},{""type"":""speak"",""message"":""The house is ready!""}]}"
+    : $@"{{""agent"":""{Role}"",""goal"":""Inspect the plaza"",""actions"":[{{""type"":""move_to"",""target"":""plaza""}},{{""type"":""inspect"",""target"":""plaza""}},{{""type"":""speak"",""message"":""I checked the plaza.""}}]}}")}";
 
         string PlanUserPrompt(string goal) =>
             $"{AgentHub.WorldSummary()}Your recent memory:\n{(Memory.Count == 0 ? "- (nothing yet)" : string.Join("\n", Memory.Select(m => "- " + m)))}\nPlayer request: {goal}";
