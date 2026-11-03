@@ -11,6 +11,7 @@ namespace AgentWorld
         static int openedFrame;
         string input = "";
         Vector2 scroll;
+        int seenLines;
 
         public static void Open(Computer computer)
         {
@@ -33,11 +34,12 @@ namespace AgentWorld
             {
                 Current.Submit(input);
                 input = "";
-                scroll.y = float.MaxValue;
                 e.Use();
             }
+            // Agents print asynchronously; follow the newest line.
+            if (Current.log.Count != seenLines) { seenLines = Current.log.Count; scroll.y = float.MaxValue; }
 
-            var rect = new Rect(Screen.width / 2f - 320, Screen.height / 2f - 200, 640, 400);
+            var rect = new Rect(Screen.width / 2f - 380, Screen.height / 2f - 230, 760, 460);
             GUILayout.BeginArea(rect, "Terminal - " + Current.id + "  (Esc fecha)", GUI.skin.window);
             scroll = GUILayout.BeginScrollView(scroll);
             GUILayout.Label(string.Join("\n", Current.log));

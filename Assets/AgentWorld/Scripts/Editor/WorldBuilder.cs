@@ -20,15 +20,15 @@ namespace AgentWorld.EditorTools
         static readonly Vector2 Center = new Vector2(0.5f, 0.5f), Feet = new Vector2(0.5f, 0f);
         static readonly Color32 Clear = new Color32(0, 0, 0, 0);
 
-        struct NpcDef { public string id, name, role; public Color32 shirt, hair; public Vector2 home; public string[] lines; }
+        struct NpcDef { public string id, name, role, ai; public Color32 shirt, hair; public Vector2 home; public string[] lines; }
 
         static readonly NpcDef[] Npcs =
         {
-            new NpcDef { id = "ada", name = "Ada", role = "Arquiteta de Agentes", shirt = C(150, 80, 180), hair = C(70, 40, 30), home = new Vector2(-3, 7),
+            new NpcDef { id = "ada", name = "Ada", role = "Arquiteta de Agentes", ai = "assistant", shirt = C(150, 80, 180), hair = C(70, 40, 30), home = new Vector2(-3, 7),
                 lines = new[] { "Este laboratório vai abrigar a Living IDE.", "Cada computador será um portal para um agente.", "Use E nos computadores para abrir o terminal." } },
-            new NpcDef { id = "linus", name = "Linus", role = "Engenheiro de Sistemas", shirt = C(70, 150, 90), hair = C(220, 190, 90), home = new Vector2(8, -6),
+            new NpcDef { id = "linus", name = "Linus", role = "Engenheiro de Sistemas", ai = "builder", shirt = C(70, 150, 90), hair = C(220, 190, 90), home = new Vector2(8, -6),
                 lines = new[] { "O kernel deste mundo ainda é simples, mas estável.", "Digite 'agents' num terminal para ver todos nós.", "Pressione F5 para salvar o mundo." } },
-            new NpcDef { id = "grace", name = "Grace", role = "Depuradora", shirt = C(200, 70, 70), hair = C(30, 30, 35), home = new Vector2(-7, 0),
+            new NpcDef { id = "grace", name = "Grace", role = "Depuradora", ai = "explorer", shirt = C(200, 70, 70), hair = C(30, 30, 35), home = new Vector2(-7, 0),
                 lines = new[] { "Encontrei um bug... era uma mariposa!", "Testes primeiro, depois o deploy.", "Logo teremos agentes LLM conversando aqui." } },
         };
 
@@ -52,6 +52,7 @@ namespace AgentWorld.EditorTools
             {
                 ['k'] = C(40, 44, 52), ['g'] = C(30, 90, 60), ['l'] = C(120, 240, 150), ['w'] = C(150, 105, 60), ['d'] = C(105, 70, 40),
             }), Feet);
+            var lake = MakeSprite("lake", LakeTex(), Center);
             var roofs = new[] { C(190, 70, 60), C(60, 110, 180), C(90, 150, 80) };
 
             // --- Prefabs -------------------------------------------------------
@@ -80,7 +81,7 @@ namespace AgentWorld.EditorTools
                 var n = Npcs[i];
                 go = MakeCharacter("Npc_" + n.name, CharSprite("npc_" + n.id, n.shirt, n.hair), false);
                 var agent = go.AddComponent<NpcAgent>();
-                agent.id = n.id; agent.displayName = n.name; agent.role = n.role; agent.lines = n.lines;
+                agent.id = n.id; agent.displayName = n.name; agent.role = n.role; agent.agentRole = n.ai; agent.lines = n.lines;
                 npcPrefabs[i] = SavePrefab(go, "Npc_" + n.name);
             }
 
@@ -116,6 +117,21 @@ namespace AgentWorld.EditorTools
             var houses = new[] { new Vector2(-13, 4), new Vector2(13, 4), new Vector2(-12, -10) };
             for (var i = 0; i < houses.Length; i++) Place(housePrefabs[i], houses[i], world).name = "House_" + (i + 1);
 
+            var lakeGo = Spr("Lake", lake, new Vector2(-6, -7), world, -85);
+            Box(lakeGo, new Vector2(4.6f, 2.4f), Vector2.zero);
+
+            // Named places for the LLM agents; plans may only reference these ids.
+            var marks = new GameObject("Landmarks").transform;
+            marks.SetParent(world);
+            Mark(marks, "lab", "computer lab with 3 terminals (Living IDE)", new Vector2(0, 8), new Vector2(0, -2));
+            Mark(marks, "plaza", "crossroads in the middle of the village", new Vector2(0, -2), Vector2.zero);
+            Mark(marks, "lake", "small blue lake south-west of the plaza", new Vector2(-6, -7), new Vector2(0, 2.2f));
+            Mark(marks, "house_1", "red-roof house, west", houses[0], new Vector2(0, -1));
+            Mark(marks, "house_2", "blue-roof house, east", houses[1], new Vector2(0, -1));
+            Mark(marks, "house_3", "green-roof house, south-west", houses[2], new Vector2(0, -1));
+            Mark(marks, "north_meadow", "open meadow north-west, near the trees", new Vector2(-14, 9), Vector2.zero);
+            Mark(marks, "east_field", "open grass field east", new Vector2(14, -7), Vector2.zero);
+
             foreach (var t in new[] { new Vector2(-17, 12), new Vector2(-10, 13), new Vector2(10, 13), new Vector2(17, 12), new Vector2(-18, -1),
                          new Vector2(18, -3), new Vector2(-5, -12), new Vector2(6, -10), new Vector2(15, -12), new Vector2(-17, -13), new Vector2(9, 8) })
                 Place(treePrefab, t, world);
@@ -136,6 +152,7 @@ namespace AgentWorld.EditorTools
             var systems = new GameObject("Systems");
             systems.AddComponent<WorldSaveManager>();
             systems.AddComponent<TerminalUI>();
+            systems.AddComponent<StructureBuilder>().housePrefab = housePrefabs[0];
 
             EditorSceneManager.SaveScene(scene, ScenePath);
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
@@ -158,6 +175,12 @@ namespace AgentWorld.EditorTools
             col.offset = new Vector2(0, 0.3f);
             if (player) { go.AddComponent<PlayerController>(); go.AddComponent<Interactor>(); }
             return go;
+        }
+
+        static void Mark(Transform parent, string id, string description, Vector2 pos, Vector2 approach)
+        {
+            var lm = Child("Landmark_" + id, parent, pos).AddComponent<Landmark>();
+            lm.id = id; lm.description = description; lm.approach = approach;
         }
 
         static GameObject SavePrefab(GameObject go, string name)
@@ -317,6 +340,15 @@ namespace AgentWorld.EditorTools
                 return Noise(x, y, 7) > .75f || dy < -4 ? C(40, 110, 50) : Noise(x, y, 8) > .9f ? C(110, 190, 90) : C(60, 140, 65);
             if (x >= 6 && x <= 9 && y <= 9) return x == 6 ? C(80, 50, 30) : C(115, 75, 45);
             return Clear;
+        });
+
+        static Texture2D LakeTex() => Tex(80, 44, (x, y) =>
+        {
+            float dx = (x - 39.5f) / 40f, dy = (y - 21.5f) / 22f, d = dx * dx + dy * dy;
+            if (d > 1f) return Clear;
+            if (d > 0.82f) return Noise(x, y, 11) > .5f ? C(200, 180, 120) : C(180, 160, 105); // sandy shore
+            if (Noise(x / 3, y, 12) > .92f) return C(170, 215, 245);                             // ripples
+            return d < 0.35f ? C(45, 100, 175) : C(65, 130, 200);
         });
 
         static Texture2D HouseTex(Color32 roof) => Tex(48, 40, (x, y) =>
