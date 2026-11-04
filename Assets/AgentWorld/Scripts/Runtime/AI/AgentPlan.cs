@@ -35,7 +35,7 @@ namespace AgentWorld
     {
         public const int MaxActions = 8;
         public static readonly string[] Actions = { "move_to", "speak", "build", "inspect", "wait" };
-        public static readonly string[] Structures = { "house" };
+        public static readonly string[] Structures = { "house", "farm" };
 
         public static AgentPlan Parse(string raw, out string error)
         {

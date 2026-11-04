@@ -15,7 +15,7 @@ namespace AgentWorld
     public class MissionState
     {
         public string objective = "", status = "None", result = "";
-        public int housesWanted, housesBuilt;
+        public int housesWanted, housesBuilt, farmsWanted, farmsBuilt;
         public List<MissionTask> tasks = new List<MissionTask>();
         public List<SiteReport> sharedMemory = new List<SiteReport>();
         public List<string> log = new List<string>();
@@ -25,11 +25,19 @@ namespace AgentWorld
     /// The model makes the decisions; every decision is validated against live world state before anything moves.
     public static class MissionControl
     {
-        public const int MaxExplore = 3, MaxHouses = 3, MaxRetries = 2, LogCap = 40;
+        public const int MaxExplore = 3, MaxHouses = 3, MaxFarms = 1, MaxRetries = 2, LogCap = 40;
         static readonly string[] Live = { "Planning", "Exploring", "Selecting", "Building" };
 
-        [Serializable] public class Delegation { public List<string> explore = new List<string>(); public int houses; public string message; }
-        [Serializable] public class SiteChoice { public List<string> build_at = new List<string>(); public string reason; }
+        [Serializable]
+        public class Delegation
+        {
+            public string feasible; // "no" when the mission is beyond the team's abilities
+            public List<string> explore = new List<string>();
+            public int houses, farms;
+            public string message;
+            public bool Infeasible => (feasible ?? "").Trim().ToLowerInvariant() is "no" or "false";
+        }
+        [Serializable] public class SiteChoice { public List<string> build_at = new List<string>(); public string farm_at, reason; }
 
         public static MissionState State { get; private set; } = new MissionState();
         public static bool Running => cts != null;
@@ -63,8 +71,19 @@ namespace AgentWorld
                 ada.Ai.Show(AgentStatus.Thinking, "planejando a missão");
                 Log($"[Ada] Pensando na missão (Llama: {AgentHub.Llm.Model})...");
                 var plan = await AskJson<Delegation>("Ada", DelegationPrompt(), $"{AgentHub.WorldSummary()}Mission: {State.objective}", ValidateDelegation, ct);
+                ada.Ai.MarkDecision();
+                if (plan.Infeasible)
+                {
+                    // Ada (Llama) judged the request outside the team's abilities: say so instead of pretending.
+                    Log($"[Llama/Ada] missão não suportada: \"{plan.message}\"");
+                    ada.Say(plan.message);
+                    State.status = "Unsupported";
+                    State.result = plan.message;
+                    return;
+                }
                 State.housesWanted = plan.houses;
-                Log($"[Llama/Ada] explorar: {string.Join(", ", plan.explore)} | casas: {plan.houses} | \"{plan.message}\"");
+                State.farmsWanted = plan.farms;
+                Log($"[Llama/Ada] explorar: {string.Join(", ", plan.explore)} | casas: {plan.houses} | fazendas: {plan.farms} | \"{plan.message}\"");
                 if (!string.IsNullOrWhiteSpace(plan.message)) ada.Say(plan.message);
                 ada.Ai.Show(AgentStatus.Idle, "aguardando relatórios");
 
@@ -94,15 +113,19 @@ namespace AgentWorld
                 State.status = "Selecting";
                 ada.Ai.Show(AgentStatus.Thinking, "escolhendo terrenos");
                 var choice = await AskJson<SiteChoice>("Ada", SelectionPrompt(), SelectionUser(), ValidateChoice, ct);
-                Log($"[Llama/Ada] construir em: {string.Join(", ", choice.build_at)} | motivo: \"{choice.reason}\"");
+                ada.Ai.MarkDecision();
+                Log($"[Llama/Ada] casas em: {string.Join(", ", choice.build_at)}{(State.farmsWanted > 0 ? $" | fazenda em: {choice.farm_at}" : "")} | motivo: \"{choice.reason}\"");
                 ada.Ai.Show(AgentStatus.Idle, "acompanhando a obra");
                 ada.Say(choice.reason);
 
                 // 4. Linus builds each approved site; Unity retries elsewhere if a site fills up.
                 State.status = "Building";
-                foreach (var site in choice.build_at)
+                var jobs = choice.build_at.Select(s => ("house", s)).ToList();
+                if (State.farmsWanted > 0) jobs.Add(("farm", choice.farm_at));
+                foreach (var (type, site) in jobs)
                 {
-                    var task = AddTask("Linus", $"construir casa perto de {site}");
+                    var label = type == "farm" ? "fazenda" : "casa";
+                    var task = AddTask("Linus", $"construir {label} perto de {site}");
                     var target = site;
                     var built = false;
                     while (task.attempts <= MaxRetries)
@@ -116,26 +139,27 @@ namespace AgentWorld
                             target = alt;
                         }
                         task.attempts++;
-                        var ok = await linus.Ai.Perform($"construir casa perto de {target}", Actions(("move_to", target), ("build", target)), Log, ct);
+                        var ok = await linus.Ai.Perform($"construir {label} perto de {target}", Actions(type, ("move_to", target), ("build", target)), Log, ct);
                         ct.ThrowIfCancellationRequested();
-                        if (ok) { State.housesBuilt++; built = true; break; }
+                        if (ok) { if (type == "farm") State.farmsBuilt++; else State.housesBuilt++; built = true; break; }
                         Log($"[Unity] tentativa {task.attempts} falhou: {linus.Ai.LastResult}");
                     }
                     Finish(task, built ? "Done" : "Failed");
                 }
 
-                State.status = State.housesBuilt >= State.housesWanted ? "Succeeded" : State.housesBuilt > 0 ? "Partial" : "Failed";
-                State.result = $"{State.housesBuilt}/{State.housesWanted} casas construídas";
+                var any = State.housesBuilt + State.farmsBuilt > 0;
+                State.status = State.housesBuilt >= State.housesWanted && State.farmsBuilt >= State.farmsWanted ? "Succeeded" : any ? "Partial" : "Failed";
+                State.result = Built();
             }
             catch (OperationCanceledException)
             {
                 State.status = "Cancelled";
-                State.result = $"cancelada ({State.housesBuilt} casas construídas)";
+                State.result = $"cancelada ({Built()})";
                 foreach (var a in new[] { grace, linus }) a.Ai.Stop();
             }
             catch (Exception e)
             {
-                State.status = State.housesBuilt > 0 ? "Partial" : "Failed";
+                State.status = State.housesBuilt + State.farmsBuilt > 0 ? "Partial" : "Failed";
                 State.result = e.Message;
             }
             finally
@@ -182,34 +206,45 @@ namespace AgentWorld
         static string DelegationPrompt() =>
 $@"You are Ada, the coordinator agent of AgentWorld, a 2D pixel-art village. You lead two agents:
 - Grace (explorer): walks to locations and reports how many free building sites each has.
-- Linus (builder): builds houses.
-Given the player's mission, decide which locations Grace must explore and how many houses Linus should build.
-Return ONLY JSON with keys explore (list of location ids), houses (number 1-{MaxHouses}) and message (one short sentence to your team).
-Rules: explore 1 to {MaxExplore} DIFFERENT ids, only from: {string.Join(", ", Ids)}.
-Prefer locations named in the mission plus open areas next to them. A village means {MaxHouses} houses.
+- Linus (builder): builds ONLY two things: houses and farms (fenced crop fields).
+The team CANNOT: demolish or move things, build anything else (castles, bridges, roads, towers...), change terrain or water, fight, or leave the map.
+Given the player's mission, decide which locations Grace must explore and how many houses and farms Linus should build.
+Return ONLY JSON with keys feasible (""yes"" or ""no""), explore (list of location ids), houses (number 0-{MaxHouses}), farms (number 0-{MaxFarms}) and message (one short sentence).
+Rules:
+- If the mission needs something the team cannot do, return feasible ""no"" and explain why in message. Never pretend.
+- explore 1 to {MaxExplore} DIFFERENT ids, only from: {string.Join(", ", Ids)}.
+- Prefer locations named in the mission plus open areas next to them.
+- A village means {MaxHouses} houses and 1 farm. Build at least one house or farm.
 Write the message in the same language as the mission.
-Example: {{""explore"":[""plaza"",""east_field""],""houses"":2,""message"":""Grace, check the plaza and the east field; Linus, get ready.""}}";
+Example: {{""feasible"":""yes"",""explore"":[""plaza"",""east_field""],""houses"":2,""farms"":0,""message"":""Grace, check the plaza and the east field; Linus, get ready.""}}";
 
         static List<string> ValidateDelegation(Delegation d)
         {
             var errors = new List<string>();
+            if (d.Infeasible)
+            {
+                if (string.IsNullOrWhiteSpace(d.message)) errors.Add("feasible=no exige uma explicação em message");
+                else if (d.message.Length > 200) d.message = d.message.Substring(0, 200);
+                return errors;
+            }
             d.explore = (d.explore ?? new List<string>()).Select(Norm).Distinct().ToList();
             if (d.explore.Count == 0) errors.Add("explore vazio");
             if (d.explore.Count > MaxExplore) d.explore = d.explore.Take(MaxExplore).ToList();
             errors.AddRange(d.explore.Where(id => !Ids.Contains(id)).Select(id => $"local inválido '{id}'"));
-            if (d.houses < 1) errors.Add("houses deve ser de 1 a " + MaxHouses);
-            d.houses = Mathf.Clamp(d.houses, 1, MaxHouses);
+            d.houses = Mathf.Clamp(d.houses, 0, MaxHouses);
+            d.farms = Mathf.Clamp(d.farms, 0, MaxFarms);
+            if (d.houses + d.farms == 0) errors.Add("nada para construir: houses e farms são 0");
             if (d.message?.Length > 200) d.message = d.message.Substring(0, 200);
             return errors;
         }
 
         static string SelectionPrompt() =>
 $@"You are Ada, the coordinator agent of AgentWorld. Grace explored locations and wrote reports to shared memory.
-Choose where Linus builds exactly {State.housesWanted} house(s).
-Return ONLY this JSON, e.g. {{""build_at"":[""plaza"",""plaza""],""reason"":""The plaza has the most free land.""}}
+Choose where Linus builds exactly {State.housesWanted} house(s){(State.farmsWanted > 0 ? " and 1 farm" : "")}.
+Return ONLY this JSON, e.g. {{""build_at"":[""plaza"",""plaza""],""farm_at"":""{(State.farmsWanted > 0 ? "east_field" : "")}"",""reason"":""The plaza has the most free land.""}}
 Rules:
-- build_at may ONLY contain these ids: {string.Join(", ", State.sharedMemory.Where(r => r.freeSites > 0).Select(r => r.location))}.
-- A location may repeat at most as many times as its free sites.
+- build_at (one id per house){(State.farmsWanted > 0 ? " and farm_at" : "")} may ONLY use these ids: {string.Join(", ", State.sharedMemory.Where(r => r.freeSites > 0).Select(r => r.location))}.
+- A location may be used at most as many times as its free sites (houses and farm together).{(State.farmsWanted > 0 ? "" : "\n- Leave farm_at empty.")}
 - If the mission names a place (e.g. ""near the lake"") and it has free sites, put the houses there first.
 Write the reason in the same language as the mission.";
 
@@ -220,9 +255,12 @@ Write the reason in the same language as the mission.";
         static List<string> ValidateChoice(SiteChoice c)
         {
             var errors = new List<string>();
-            c.build_at = (c.build_at ?? new List<string>()).Select(Norm).Take(State.housesWanted).ToList();
-            if (c.build_at.Count == 0) errors.Add("build_at vazio");
-            foreach (var g in c.build_at.GroupBy(s => s))
+            c.build_at = (c.build_at ?? new List<string>()).Select(Norm).Where(s => s != "").Take(State.housesWanted).ToList();
+            if (State.housesWanted > 0 && c.build_at.Count == 0) errors.Add("build_at vazio");
+            c.farm_at = State.farmsWanted > 0 ? Norm(c.farm_at) : null;
+            if (State.farmsWanted > 0 && c.farm_at == "") errors.Add("farm_at vazio");
+            var uses = c.farm_at == null || c.farm_at == "" ? c.build_at : c.build_at.Append(c.farm_at).ToList();
+            foreach (var g in uses.GroupBy(s => s))
             {
                 var r = State.sharedMemory.FirstOrDefault(x => x.location == g.Key);
                 if (r == null) errors.Add($"'{g.Key}' não foi explorado");
@@ -234,8 +272,13 @@ Write the reason in the same language as the mission.";
 
         // --- Helpers ---------------------------------------------------------------
 
-        static List<AgentAction> Actions(params (string type, string loc)[] steps) => steps.Select(s =>
-            s.type == "build" ? new AgentAction { type = "build", structure = "house", location = s.loc } : new AgentAction { type = s.type, target = s.loc }).ToList();
+        static List<AgentAction> Actions(params (string type, string loc)[] steps) => Actions("house", steps);
+
+        static List<AgentAction> Actions(string structure, params (string type, string loc)[] steps) => steps.Select(s =>
+            s.type == "build" ? new AgentAction { type = "build", structure = structure, location = s.loc } : new AgentAction { type = s.type, target = s.loc }).ToList();
+
+        static string Built() =>
+            $"{State.housesBuilt}/{State.housesWanted} casas" + (State.farmsWanted > 0 ? $", {State.farmsBuilt}/{State.farmsWanted} fazenda" : "") + " construídas";
 
         static MissionTask AddTask(string agent, string description)
         {
