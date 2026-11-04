@@ -101,6 +101,15 @@ namespace AgentWorld.Tests
         }
 
         [Test]
+        public void TerminalFont_ScalesWithScreenHeight()
+        {
+            Assert.AreEqual(18, TerminalUI.FontSize(720));
+            Assert.AreEqual(27, TerminalUI.FontSize(1080));
+            Assert.AreEqual(14, TerminalUI.FontSize(300)); // floor keeps tiny windows legible
+            Assert.AreEqual(48, TerminalUI.FontSize(4320));
+        }
+
+        [Test]
         public void MainScene_HasAiWorld()
         {
             EditorSceneManager.OpenScene("Assets/AgentWorld/Scenes/Main.unity");
