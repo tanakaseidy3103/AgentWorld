@@ -32,8 +32,12 @@ AI agents (local Llama via Ollama):
                              e.g. mission build a small village near the lake
   mission status | mission stop
   skills                     registered skills and who may use them (StreamingAssets/agents.json)
+  skill <id>                 one skill: parameters, permissions, who can perform it
+  skill test <agent> <json>  dry run: validation only, nothing executes
+                             e.g. skill test grace {""type"":""count_people"",""target"":""lab""}
+  skill run <agent> <json>   validate, then the agent performs it (no LLM involved)
   eval list | eval run <scenario> | eval report   evaluation with measured metrics
-[Tab] show/hide Mission Control   [M] mission bar
+[Tab] show/hide Mission Control   [M] mission bar   [K] Skill Library
 free sentences (3+ words) go to Ada, who picks the specialist:
   e.g. Find a safe place to build | What is Linus doing? | Explain the current mission
 [Llama] = model decision   [Unity] = action executed by the game";
@@ -58,6 +62,7 @@ free sentences (3+ words) go to Ada, who picks the specialist:
                 case "world": return World(arg);
                 case "mission": return Mission(arg, host);
                 case "skills": return Skills();
+                case "skill": return SkillCommand(arg, host);
                 case "eval": return Eval(arg, host);
                 case "ai": return arg == "status" ? AiStatus(host) : "usage: ai status";
                 default:
@@ -155,10 +160,39 @@ free sentences (3+ words) go to Ada, who picks the specialist:
 
         static string Skills()
         {
-            var lines = SkillRegistry.All.Select(s => $"{s.Id,-16} {s.Description}  [params: {string.Join(", ", s.Parameters)}]");
+            var lines = SkillRegistry.All.Select(s => $"{s.Id,-16} {(s.Origin == "built-in" ? "" : "[custom] ")}{s.Description}  [params: {string.Join(", ", s.Parameters)}]");
             var agents = AgentHub.Agents.Select(n => $"{n.displayName} ({n.RoleTitle}): {string.Join(", ", AgentConfigs.SkillsFor(n.agentRole))}");
             var errors = AgentConfigs.Errors.Count == 0 ? "" : "\nconfiguration errors:\n  " + string.Join("\n  ", AgentConfigs.Errors);
-            return "registered skills:\n  " + string.Join("\n  ", lines) + $"\nagents (source: {AgentConfigs.Source}):\n  " + string.Join("\n  ", agents) + errors;
+            return "registered skills:\n  " + string.Join("\n  ", lines) + $"\nagents (source: {AgentConfigs.Source}):\n  " + string.Join("\n  ", agents) + errors +
+                   "\ndocumentation-only (not implemented): " + string.Join(", ", SkillRegistry.DocumentationOnly.Select(d => d.Id)) +
+                   "\n[K] Skill Library  ·  skill <id>  ·  skill test <agent> <json>";
+        }
+
+        static string SkillCommand(string arg, Computer host)
+        {
+            var parts = arg.Split(new[] { ' ' }, 3, StringSplitOptions.RemoveEmptyEntries);
+            var sub = parts.Length > 0 ? parts[0].ToLowerInvariant() : "";
+            if (sub == "test" || sub == "run")
+            {
+                if (parts.Length < 3) return $"usage: skill {sub} <agent> <json action>";
+                var agent = AgentHub.Find(parts[1]);
+                if (agent == null) return $"unknown agent: {parts[1]} (see agent list)";
+                if (sub == "run")
+                    return SkillLibrary.Run(agent, parts[2], Print(host), out var runErrors)
+                        ? $"[Unity] validated; {agent.displayName} is performing it"
+                        : $"REJECTED for {agent.displayName}:\n  " + string.Join("\n  ", runErrors);
+                var errors = SkillLibrary.Check(agent, parts[2], out _);
+                return errors.Count == 0 ? $"VALID for {agent.displayName} (dry run, nothing executed)" : $"REJECTED for {agent.displayName}:\n  " + string.Join("\n  ", errors);
+            }
+            var s = SkillRegistry.Get(sub);
+            if (s == null)
+            {
+                var idea = SkillRegistry.DocumentationOnly.FirstOrDefault(d => d.Id == sub);
+                return idea != null ? $"{idea.Id}: documentation-only example, NOT implemented ({idea.Missing})" : "usage: skill <id> | skill test <agent> <json> | skill run <agent> <json>  (see skills)";
+            }
+            return $"{s.Id} - {s.Name} [{s.Origin}]\n  {s.Description}\n  parameters: {string.Join("; ", s.Parameters)}\n  model writes: {s.Example}\n" +
+                   $"  roles allowed: {string.Join(", ", s.Roles)}\n  safety: {s.Safety}\n" +
+                   string.Join("\n", AgentHub.Agents.Select(n => $"  {n.displayName}: {SkillLibrary.Availability(s, n.agentRole)}"));
         }
 
         static string Eval(string arg, Computer host)

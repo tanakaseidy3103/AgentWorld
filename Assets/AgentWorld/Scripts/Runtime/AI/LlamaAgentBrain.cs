@@ -231,6 +231,7 @@ Rules:
 - If the requested place does not exist, choose the most sensible valid id and say so in a speak action.
 - Include EVERY step needed to fully complete the request. {(AgentConfigs.Has(Role, "build_house") ? "Building only happens with a build action." : "You cannot build.")}
 - Write speak messages in the same language as the player's request.
+- Never guess results (counts, measurements, what is somewhere) in a speak action: skills such as inspect, report_findings and count_people report the real values themselves.
 - Output JSON only.
 Example request ""{(AgentConfigs.Has(Role, "build_house") ? "build a house by the plaza" : "check the plaza")}"" ->
 {(AgentConfigs.Has(Role, "build_house")

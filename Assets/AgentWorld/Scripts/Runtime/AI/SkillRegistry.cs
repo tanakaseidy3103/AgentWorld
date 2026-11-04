@@ -31,6 +31,14 @@ namespace AgentWorld
         public Func<AgentAction, ICollection<string>, string> Validate;
         /// Runs on Unity's main thread; returns a short result for logs and memory.
         public Func<SkillContext, CancellationToken, Task<string>> Execute;
+        /// "built-in" (SkillRegistry.cs) or where a custom skill comes from; shown in the Skill Library.
+        public string Origin = "built-in";
+    }
+
+    /// An idea described in the docs that is NOT registered: agents cannot use it, and plans naming it are rejected.
+    public class DocumentedSkillIdea
+    {
+        public string Id, Description, Missing;
     }
 
     public static class SkillRegistry
@@ -51,7 +59,18 @@ namespace AgentWorld
             skills[s.Id] = s;
         }
 
-        static SkillRegistry() => RegisterBuiltIns();
+        /// Documentation-only examples, listed in the Skill Library so nobody mistakes them for working skills.
+        public static readonly DocumentedSkillIdea[] DocumentationOnly =
+        {
+            new DocumentedSkillIdea { Id = "water_crops", Description = "Water the crops of a farm.", Missing = "there is no crop-growth system yet" },
+            new DocumentedSkillIdea { Id = "trade_items", Description = "Exchange items with another agent.", Missing = "agents have no inventory" },
+        };
+
+        static SkillRegistry()
+        {
+            RegisterBuiltIns();
+            CustomSkills.RegisterAll(); // registered through the same public API a project would use
+        }
 
         static string NeedLocation(string id, ICollection<string> locations, string field) =>
             locations.Contains(id) ? null : $"invalid location '{id}' in {field}";

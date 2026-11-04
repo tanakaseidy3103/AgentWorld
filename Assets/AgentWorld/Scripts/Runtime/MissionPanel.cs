@@ -27,6 +27,7 @@ namespace AgentWorld
         {
             if (!(FindAnyObjectByType<TerminalUI>() is TerminalUI ui)) return;
             if (FindAnyObjectByType<MissionPanel>() == null) ui.gameObject.AddComponent<MissionPanel>();
+            if (FindAnyObjectByType<SkillLibraryPanel>() == null) ui.gameObject.AddComponent<SkillLibraryPanel>();
             if (FindAnyObjectByType<InspectionMarkers>() == null) ui.gameObject.AddComponent<InspectionMarkers>();
         }
 
@@ -102,7 +103,7 @@ namespace AgentWorld
         {
             var m = MissionControl.State;
             var sb = new StringBuilder();
-            sb.Append($"<b><color=#ffd95a>MISSION CONTROL</color></b>  <size={small}>[M] new mission · [Tab] hide</size>\n");
+            sb.Append($"<b><color=#ffd95a>MISSION CONTROL</color></b>  <size={small}>[M] new mission · [K] skills · [Tab] hide</size>\n");
             sb.Append($"Meta Llama (Ollama): <color={(Connected ? "#7dff9a" : "#ff7a7a")}>{Ollama}</color>\n\n");
 
             sb.Append(m.status == "None"

@@ -46,8 +46,8 @@ AgentWorld makes the process visible and checkable:
 
 - **Model and runtime:** Meta Llama 3.2 3B Instruct (open weights) served by Ollama on localhost. Unity calls
   `/api/chat` asynchronously with `UnityWebRequest`, using JSON mode for decisions, main-thread timeouts, and cancellation.
-- **Skill registry:** seven skills (`move_to`, `inspect`, `report_findings`, `build_house`, `build_farm`, `speak`,
-  `wait`), each with an id, allowed roles, a parameter schema, a validator, an executor, and safety notes.
+- **Skill registry:** eight skills (`move_to`, `inspect`, `report_findings`, `build_house`, `build_farm`, `speak`,
+  `wait`, and the custom `count_people`), browsable in an in-game Skill Library (K) with a safe tester; each with an id, allowed roles, a parameter schema, a validator, an executor, and safety notes.
 - **Agent configuration:** `agents.json` assigns titles, personalities, and skills to the existing agents and is
   validated at startup.
 - **Mission pipeline:** Llama delegation → Unity-measured scouting → Llama dialogue → Llama site selection
