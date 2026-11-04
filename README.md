@@ -1,181 +1,235 @@
-# AgentWorld — Build, Test & Share AI Agents
+# AgentWorld
 
-**An open-source visual laboratory for building, testing, and understanding collaborative AI agents powered by Meta Llama.**
+**An open-source visual laboratory for building, testing, and evaluating collaborative AI agents powered by Meta Llama.**
 
-![Ada, Grace and Linus discussing a mission; Mission Control on the right](docs/screenshots/dialogue.png)
+![Ada, Grace, and Linus collaborating on a live mission, with Mission Control on the right](docs/screenshots/dialogue.png)
 
-AgentWorld is a Unity 6 pixel-art world where three AI agents plan, talk, scout and build together.
-Meta Llama 3.2 runs **locally through Ollama**. It makes the decisions and writes the agents' dialogue,
-while Unity **validates every decision against the live world** and executes it deterministically.
-Developers can configure the agents, give them skills from a registry, watch them collaborate, and
-evaluate missions with measured metrics.
+AgentWorld is a Unity 6 pixel-art world where three AI agents plan, talk, scout, and build together.
+Meta Llama 3.2 runs **locally through Ollama** and makes the decisions. Unity validates every decision
+against the live world before anything happens, and you can watch the whole process: who decided what,
+what was checked, and what was built.
 
-> Built for the Meta Global AI Developer Hackathon 2026 · Unity **6000.0.60f1** · Windows · Meta Llama 3.2 3B via Ollama
+Built for the Meta Global AI Developer Hackathon 2026 · Unity **6000.0.60f1** · Windows · Meta Llama 3.2 3B (local)
 
-## Why
+---
 
-AI agents are hard to observe and hard to trust. In a chat log you can't see *who* decided *what*,
-whether the decision was valid, or how often the model gets it wrong. AgentWorld puts agents in a world
-where every step is visible and every model output passes through a validator before anything happens.
+## Why it is useful
 
-**Three differentiators**
-1. **Visible collaboration.** Ada (coordinator), Grace (explorer) and Linus (builder) talk to each other
-   in speech bubbles, share a structured memory, and work in the same world.
-2. **Safe execution.** Llama proposes JSON. Unity checks it against the skill registry, the agent's
-   allowed skills and the real world state (existing places, free land, capacity), then executes. Model
-   text is never executed as code.
-3. **Developer extensibility.** Skills live in a registry (`SkillRegistry`), agents are configured in
-   `agents.json`, and missions can be evaluated with `eval run <scenario>`, which produces a JSON report.
+When agents act in an environment, three questions matter: *what did the model decide, was the decision
+valid, and how often does it go wrong?* Chat logs rarely answer them. AgentWorld does:
 
-## What happens in a mission
+- **Visible collaboration.** Ada (Coordinator), Grace (Explorer), and Linus (Builder) talk in speech bubbles,
+  share a structured memory, and work in the same world.
+- **Safe execution.** The model returns JSON that names *skills*. Unity checks each action against a skill
+  registry, the agent's permissions, and the real world state, and only then executes it. Model output is
+  never run as code.
+- **Reproducible evaluation.** Built-in scenarios produce measured reports (status, structures built,
+  invalid model responses, recoveries, duration) as text and JSON.
+- **Extensible skills.** Developers configure which skills each agent may use (`agents.json`) and add new
+  skills in C#.
 
-`mission build a small village near the lake` (or press **M** and type it):
+## How a mission works
 
-1. **Ada → Llama:** is this feasible for the team? Which places should Grace scout? How many houses and farms?
-   If the request is outside the team's skills (for example "build a castle on the lake"), Ada explains why
-   and the mission ends as **Unsupported**. Nothing is faked.
-2. **Grace** walks to each place. **Unity measures** the free building sites there, and Grace plants a
-   flag and writes a `SiteReport` to shared memory.
-3. **Team dialogue (Llama):** Grace reports the measured numbers to Ada; Linus judges feasibility and gives a tip.
-4. **Ada → Llama:** picks sites using the reports and the dialogue. Unity rejects places that weren't
-   explored or that are over capacity, and Llama gets one retry with the error.
-5. **Linus** walks to each site; scaffolding and dust appear; the house or farm rises. If a site filled up
-   in the meantime, Unity recovers by using another reported location.
-6. The outcome is reported honestly: Succeeded / Partial / Failed / Cancelled / Unsupported.
+Press **M** in game and type `Build a small village near the lake`:
 
-![Linus building, scaffold and dust](docs/screenshots/building.png)
+1. **Ada asks Llama** whether the mission is feasible for the team, which places Grace should scout, and how
+   many houses and farms to build. Requests the team can't fulfill (for example, a castle on the lake) end
+   as **Unsupported**, with Ada's explanation.
+2. **Grace walks to each place.** Unity measures the free building sites, Grace plants a survey flag, and
+   the result is written to shared memory.
+3. **The agents talk (Llama).** Grace reports the measured numbers to Ada, and Linus comments on feasibility.
+4. **Ada asks Llama to pick the sites**, using the reports and the conversation. Unity rejects sites that were
+   not explored or are out of capacity, and the model gets one retry with the error message.
+5. **Linus builds.** He walks to each site; scaffolding and dust appear while the structure rises. If a site
+   filled up in the meantime, Unity moves to another reported site.
+6. **The outcome is reported as it happened:** Succeeded, Partial, Failed, Cancelled, or Unsupported.
 
-## How we use Meta's open-weight AI
+![Linus building next to the plaza](docs/screenshots/building.png)
+
+## Meta Llama integration
 
 | | |
 |---|---|
-| Model | **Meta Llama 3.2 3B Instruct** (`llama3.2`, ~2 GB), open weights |
-| Runtime | **Ollama** on the user's own computer, `http://localhost:11434`, `/api/chat` (JSON mode for decisions) |
-| Not used | Meta Model API, hosted inference, paid APIs, API keys |
-| Llama decides | feasibility, mission decomposition, site selection, specialist routing, single-agent action plans, agent dialogue, NPC chat |
-| Unity decides | whether places exist, free land per place, exact placement, collisions, pathing, retries, recovery, outcome |
+| Model | **Meta Llama 3.2 3B Instruct** (`llama3.2`, about 2 GB), open weights |
+| Runtime | **Ollama on your own computer** (`http://localhost:11434`). Live inference requires Ollama to be running locally |
+| Not used | Hosted inference, Meta Model API, paid APIs, API keys |
+| Llama decides | feasibility, task delegation, site selection, specialist routing, single-agent action plans, agent dialogue, NPC chat |
+| Unity decides | which places exist, how much land is free, exact placement, collisions, movement, retries, recovery, the final outcome |
 
-Special prizes: this project uses **Llama 3.2** only. It does not use Muse Glimmer or Muse Spark and makes no
-claim to those categories.
+AgentWorld uses Llama 3.2 only; it does not use Muse Glimmer or Muse Spark.
 
-## Measured results (real Llama 3.2 3B, local)
+## The seven skills
 
-From `eval run` / `LiveLlama_EvaluationSuite` on Nov 4 2026. Laptop: Intel i7-13650HX, 16 GB RAM, RTX 3050 6 GB.
+Every action an agent can take is a registered skill with an id, allowed roles, parameters, a validator,
+an executor, and safety notes (`Assets/AgentWorld/Scripts/Runtime/AI/SkillRegistry.cs`). Type `skills` in a
+lab terminal to list them.
 
-| Scenario | Outcome | Built | Invalid LLM responses | Dialogue turns | Duration |
-|---|---|---|---|---|---|
-| `village` — "Build a small village near the lake" | Succeeded (PASS) | 2/2 houses | 0 | 4 | 18.0 s |
-| `farm` — "…with a farm near the lake" | Succeeded (PASS) | 2/2 houses, 1/1 farm | 0 | 4 | 28.8 s |
-| `unsupported` — "…giant stone castle…on top of the lake" | Unsupported (PASS) | 0 | 0 | 0 | 1.9 s |
+| Skill | Who may use it | What Unity does |
+|---|---|---|
+| `move_to` | all | Walks to a named place (routes through the lab door when needed) |
+| `inspect` | all | Walks there and describes nearby landmarks and people |
+| `report_findings` | Explorer | Measures the free building sites at a place and reports the number |
+| `build_house` | Builder | Finds a free site next to a place, walks there, and builds a house |
+| `build_farm` | Builder | Same, with a walkable fenced farm |
+| `speak` | all | Shows a speech bubble (max 200 characters) |
+| `wait` | all | Pauses for 0.5 to 10 seconds |
 
-Specialist routing (`LiveLlama_Routing`): 5/5 requests routed as expected: capabilities, status, scout, explain,
-unsupported ("Build a bridge over the lake" was refused).
+Validation, in order: is the action a registered skill? Does this agent have it (`agents.json`)? Are the
+parameters valid in the current world (real place ids, clamped numbers)? Plans with more than 8 actions are
+rejected. Construction placement is always chosen by Unity: inside the map, off the roads and the lab, no
+overlap, clearance around each structure.
 
-Earlier live runs of the village mission during development: 10 runs, 9 Succeeded, 1 Partial (Ada chose fewer
-sites than she planned). Durations depend on hardware and on how warm the model is.
+## Configuring agents and adding skills
 
-## Quick start (Windows)
+`Assets/StreamingAssets/agents.json` sets each existing agent's title, personality, and skills. It is
+validated at startup: unknown skills, skills not allowed for a role, and unknown roles are reported and
+dropped. In a Windows build, the file is at `AgentWorld_Data/StreamingAssets/agents.json`.
 
-1. Install **Ollama**: <https://ollama.com/download/windows> (it runs locally on your machine).
-2. `ollama pull llama3.2` and check with `ollama list`.
-3. Unity Hub → *Add project from disk* → this folder → editor **6000.0.60f1**.
-   On first open the world is generated automatically (or use **AgentWorld → Rebuild World**).
-4. Open `Assets/AgentWorld/Scenes/Main.unity`, press **Play**, press **M**, type
-   `Build a small village near the lake`, press Enter, then Esc to watch.
+```json
+{ "id": "grace", "role": "explorer", "title": "Explorer",
+  "skills": ["move_to", "inspect", "report_findings", "speak", "wait"] }
+```
 
-Prebuilt player: **AgentWorld → Build Windows** writes `Builds/Windows/`. Ship the **whole folder**
-(`AgentWorld.exe`, `AgentWorld_Data/`, `UnityPlayer.dll`, `MonoBleedingEdge/`, `D3D12/`), not just the .exe.
-`AgentWorld_Data/StreamingAssets/agents.json` can be edited next to the build.
+Keep in mind:
+- `agents.json` configures the three existing agents (Ada, Grace, Linus); it does not create new characters.
+- **JSON alone cannot create a skill.** A new skill is written in C# with `SkillRegistry.Register(...)`, then
+  listed in an agent's `skills`.
 
-Settings (environment variables): `AGENTWORLD_MODEL` (default `llama3.2`), `AGENTWORLD_OLLAMA_URL`
-(default `http://localhost:11434`), `AGENTWORLD_TIMEOUT` (seconds per HTTP request, default 90).
-If Ollama isn't running, Mission Control shows *offline (start Ollama)* and missions fail with a clear message.
-Keep Ollama local: don't expose port 11434 to the internet.
+[docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) walks through a complete example: a `count_people` skill
+registered in C#, given to Grace, and executed from a plan. The same code runs in the test suite
+(`CustomSkillExampleTests`).
 
-**Hardware.** Tested only on the laptop above. Llama 3.2 3B needs about 2 GB of disk and a few GB of RAM.
-It also runs on CPU, just slower; `llama3.2:1b` is lighter but less reliable at JSON.
+## Getting started
 
-## Controls and commands
+### 1. Install Ollama and the model
+
+1. Install Ollama for Windows: <https://ollama.com/download/windows>
+2. Open a terminal and run `ollama pull llama3.2`
+3. Check with `ollama list` (you should see `llama3.2:latest`)
+
+Ollama must be running whenever you want live inference; the game shows *offline (start Ollama)* otherwise.
+Keep it local and don't expose port 11434 to the internet.
+
+### 2a. Run the Windows build
+
+Download `AgentWorld-Windows-x64.zip` from the GitHub release, unzip the **whole folder**, and run
+`AgentWorld.exe`. The folder must keep `AgentWorld_Data/`, `UnityPlayer.dll`, `MonoBleedingEdge/`, and `D3D12/`
+next to the executable.
+
+### 2b. Open the Unity project
+
+1. Unity Hub → **Add project from disk** → this folder → editor **6000.0.60f1**
+2. On first open, the world (art, prefabs, scene) is generated automatically. You can regenerate it at any
+   time with **AgentWorld → Rebuild World**.
+3. Open `Assets/AgentWorld/Scenes/Main.unity` and press **Play**.
+4. To build the player yourself: **AgentWorld → Build Windows** (output in `Builds/Windows/`).
+
+Optional environment variables: `AGENTWORLD_MODEL` (default `llama3.2`), `AGENTWORLD_OLLAMA_URL`
+(default `http://localhost:11434`), `AGENTWORLD_TIMEOUT` (seconds per request, default 90).
+
+### Controls
 
 | Key | Action |
 |---|---|
-| WASD | walk |
-| M | mission bar: any request in plain language (Ada routes it) |
-| E | lab computer → terminal · next to an agent → chat with it (Llama) |
-| Tab | show/hide Mission Control |
-| F5 / F9 | save / load |
+| WASD | Walk |
+| M | Mission bar: type any request in plain language |
+| E | At a lab computer: terminal. Next to an agent: chat with it |
+| Tab | Show or hide Mission Control |
+| F5 / F9 | Save / load |
+
+### Terminal commands (lab computers)
 
 ```
-mission <objective> | mission status | mission stop      multi-agent mission
-Find a safe place to build / What is Linus doing? / What can Linus build? / Explain the current mission
-                                                          free sentences (3+ words) → Ada picks the specialist
-agent builder|explorer|assistant <task> · agent list · agent status · agent stop <id>
-skills                                                    skill registry + each agent's skills
-eval list | eval run village|farm|unsupported | eval report   measured evaluation, JSON export
-world status | world structures | ai status | help, echo, whoami, agents, time, ide, clear
+mission <objective>           start a multi-agent mission; mission status | mission stop
+<any sentence of 3+ words>    Ada routes it: mission, scouting, "What is Linus doing?", "What can Linus build?", ...
+agent builder|explorer|assistant <task>    one agent plans and acts on its own
+skills                        registered skills and each agent's permissions
+eval list | eval run <scenario> | eval report
+world status | world structures | ai status | help
 ```
 
-The in-game UI is in English. Requests work in any language Llama understands (tested in English and Portuguese).
-
-## Architecture
+## Evaluation
 
 ```
- Player ─► M bar / terminal ─► ExpertRouter (Ada · Llama: mission|scout|status|capabilities|explain|unsupported)
-                                    │
-                                    ▼
-                           MissionControl (Ada · Llama decisions, validated)
-             ┌──────────────────────┼─────────────────────────────┐
-     Grace: inspect +        Team dialogue (Llama,           Linus: build_house / build_farm
-     Unity-measured          grounded in measured            (StructureBuilder: free site,
-     SiteReport → shared     numbers) → feeds Ada's          no overlap, off roads, recovery)
-     memory                  site choice
-                                    │
-   LlamaAgentBrain (per NPC): state machine, memory, timeout, cancel
-   SkillRegistry: id · roles · params · Validate · Execute · safety      agents.json → AgentConfigs
-   PlanValidator: model JSON → registered skill? allowed for agent? valid params vs world?
-   ILlmClient ─► OllamaClient (UnityWebRequest, async) ─► Ollama ─► Meta Llama 3.2 (local)
-   WorldSaveManager ─► world.json v3 (structures, memory, mission, shared memory, dialogue)
-   Evaluation ─► eval_<scenario>_<time>.json (persistentDataPath/evaluations)
+eval list
+eval run village        # also: farm, unsupported
+eval report             # report for the most recent mission
 ```
 
-`ILlmClient` is the provider interface: a hosted Meta model could be added as another implementation
-(not built; no cloud code or keys ship in the client).
+Reports include the mission status against the expected status, structures built, tasks done and failed,
+invalid model responses (validator retries), recoveries, dialogue turns, and duration. JSON copies are saved to
+`%USERPROFILE%\AppData\LocalLow\DefaultCompany\AgentWorld\evaluations\`.
 
-Developer documentation: **[docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)** (agents, skills, testing, safety).
-Internals: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+## Results
+
+Measured with real Llama 3.2 3B on a laptop (Intel i7-13650HX, 16 GB RAM, RTX 3050 6 GB), November 4, 2026.
+
+| Run | Outcome |
+|---|---|
+| Evaluation `village` | Succeeded (pass), 2/2 houses, 0 invalid responses, 18.0 s |
+| Evaluation `farm` | Succeeded (pass), 2/2 houses and 1/1 farm, 28.8 s |
+| Evaluation `unsupported` ("giant stone castle on top of the lake") | Unsupported (pass), refused with an explanation, 1.9 s |
+| Specialist routing, 5 typical requests | 5/5 routed as expected |
+| Village mission in the Windows build at 1920x1080 | Succeeded, 2/2 houses, no exceptions in the player log |
+
+During development the village mission ran 10 more times: 9 Succeeded and 1 Partial (Ada chose fewer sites
+than she had planned). Timing depends on hardware and on whether the model is already loaded.
+
+![Mission completed, captured from the Windows build at 1920x1080](docs/screenshots/windows-build-1080p.png)
 
 ## Tests
 
 ```
-Unity.exe -batchmode -projectPath . -executeMethod AgentWorld.EditorTools.WorldBuilder.Build -quit
-Unity.exe -batchmode -projectPath . -runTests -testPlatform EditMode -testResults TestResults-EditMode.xml
-Unity.exe -batchmode -projectPath . -runTests -testPlatform PlayMode -testResults TestResults-PlayMode.xml
+Unity.exe -batchmode -quit -projectPath . -executeMethod AgentWorld.EditorTools.WorldBuilder.Build
+Unity.exe -batchmode -projectPath . -runTests -testPlatform EditMode -testResults edit.xml
+Unity.exe -batchmode -projectPath . -runTests -testPlatform PlayMode -testResults play.xml
 ```
 
-27 EditMode + 36 PlayMode tests pass. They use a **deterministic mock LLM** (results are
-labelled `mock-llama`, never reported as Llama). Coverage: skill registry, agent config validation,
-plan validation, unsafe actions, missions, dialogue (and dialogue failure), knowledge reuse, specialist
-routing, unsupported requests, farms, recovery, cancellation, timeouts, Ollama offline, save/load,
-terminal, evaluation reports. Live-Llama tests are opt-in:
+Current status: **27/27 EditMode and 37/37 PlayMode tests pass** (5 opt-in live tests are skipped by
+default). Tests use a deterministic mock LLM, and its results are labeled `mock-llama`, never reported as Llama.
+Live-model tests are opt-in, for example:
 
 ```
 Unity.exe -batchmode -projectPath . -runTests -testPlatform PlayMode -testFilter AgentWorld.Tests.MissionPlayModeTests.LiveLlama_EvaluationSuite
 ```
 
-## Built during the hackathon
+## Architecture
 
-All code and art were created during the hackathon (git history from Nov 3 2026): the world, procedural
-pixel art (`WorldBuilder.cs`, `RuntimeArt.cs`), the Llama agents, the mission pipeline, the dialogue,
-routing, skills, configuration, evaluation and UI. There are no third-party art assets.
+```
+Player ─► M bar / terminal ─► ExpertRouter (Ada, Llama): mission | scout | status | capabilities | explain | unsupported
+                                  │
+                                  ▼
+                         MissionControl: delegation (Llama) → scouting (Unity measures) → dialogue (Llama)
+                                         → site selection (Llama, validated) → construction (Unity, with recovery)
+                                  │
+  LlamaAgentBrain (per agent): state machine, memory, timeouts, cancellation
+  SkillRegistry: id · roles · parameters · Validate · Execute · safety        agents.json → AgentConfigs
+  PlanValidator: registered skill? allowed for this agent? valid in the current world?
+  ILlmClient → OllamaClient (async UnityWebRequest) → Ollama → Meta Llama 3.2 (local)
+  WorldSaveManager → world.json v3 · Evaluation → JSON reports
+```
+
+More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · Developer guide: [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) ·
+Demo script: [docs/DEMO.md](docs/DEMO.md)
 
 ## Known limitations
 
-- Two structure types (house, farm); max 3 houses + 1 farm per mission, 12 agent-built structures in total. No roads or bridges.
-- `agents.json` configures the three existing agents (titles, personalities, skills). It doesn't spawn new NPCs,
-  and the model is global (`AGENTWORLD_MODEL`), not per agent.
-- New skills are added in C# (`SkillRegistry.Register`); there is no scripting or plugin loading.
-- Llama 3.2 3B sometimes picks sites other than the one named in the mission. Dialogue is model text: Linus's
-  estimates are opinions, and only the chosen sites are validated.
-- Movement is straight-line with sidestepping (no pathfinding). Missions run their steps one after another
-  and are not resumed after loading a save.
-- No `LICENSE` file has been chosen yet (see `docs/SUBMISSION.md`).
+- Two structure types: houses and farms (up to 3 houses and 1 farm per mission, 12 agent-built structures in total).
+  There are no roads, bridges, or other structures.
+- `agents.json` configures the three existing agents; new characters and new roles require code. One model is used for all agents.
+- New skills are written in C#; there is no plugin loading or scripting.
+- Llama 3.2 3B sometimes picks sites other than the one named in the mission, and the agents' dialogue is
+  model-generated text. Only the chosen sites and actions are validated, not every claim in the dialogue.
+- Movement uses straight lines with sidestepping, not full pathfinding.
+- Missions run one at a time and are not resumed after loading a save.
+- In-game UI and docs are in English; requests can be written in other languages Llama understands.
+
+## Built during the hackathon
+
+All code and art in this repository were created during the hackathon (git history from November 3, 2026).
+The pixel art is generated procedurally by our own code (`WorldBuilder.cs`, `RuntimeArt.cs`); no third-party
+art assets are used.
+
+## License
+
+A license has not been selected yet.
