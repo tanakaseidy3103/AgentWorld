@@ -11,8 +11,22 @@ namespace AgentWorld.EditorTools
 {
     /// Generates pixel-art sprites, prefabs and the Main scene.
     /// Menu: AgentWorld > Rebuild World. Batch: -executeMethod AgentWorld.EditorTools.WorldBuilder.Build
+    [InitializeOnLoad]
     public static class WorldBuilder
     {
+        // Generated art/prefabs/scene are not in git: a fresh clone builds them on first editor load.
+        static WorldBuilder()
+        {
+            if (Application.isBatchMode) return;
+            EditorApplication.delayCall += () =>
+            {
+                if (File.Exists(ScenePath) || EditorApplication.isPlayingOrWillChangePlaymode) return;
+                Debug.Log("AgentWorld: first run, generating the world...");
+                Build();
+                EditorSceneManager.OpenScene(ScenePath);
+            };
+        }
+
         const string Root = "Assets/AgentWorld";
         const string ArtDir = Root + "/Art", PrefabDir = Root + "/Prefabs", SceneDir = Root + "/Scenes";
         public const string ScenePath = SceneDir + "/Main.unity";
