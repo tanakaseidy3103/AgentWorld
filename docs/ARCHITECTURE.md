@@ -1,4 +1,4 @@
-# Arquitetura (MVP 2)
+# Arquitetura (final sprint)
 
 ```
 Assets/AgentWorld/
@@ -18,6 +18,8 @@ Assets/AgentWorld/
 | `LlamaAgentBrain` / `AgentHub` | `Runtime/AI/LlamaAgentBrain.cs` | máquina de estados, prompt com estado do mundo, memória, chat, timeout/cancel |
 | `Landmark` | `Runtime/AI/Landmark.cs` | locais nomeados que o LLM pode citar |
 | `StructureBuilder` / `BuiltStructure` | `Runtime/AI/StructureBuilder.cs` | busca de terreno livre, construção animada, capture/restore |
+| `MissionControl` | `Runtime/AI/MissionControl.cs` | missão multi-agente: delegação (Llama) → exploração (Unity mede terrenos) → memória compartilhada → seleção (Llama) → construção com recuperação |
+| `MissionPanel` | `Runtime/MissionPanel.cs` | painel Mission Control (Tab); separa decisões do Llama de ações do Unity |
 | `NpcChatBackend` | `Runtime/TerminalBackend.cs` | chat com NPC reaproveitando a UI do terminal |
 
 Regras:

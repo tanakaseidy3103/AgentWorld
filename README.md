@@ -1,149 +1,156 @@
-# AgentWorld (Unity) — MVP 2: Autonomous Llama Agents
+# AgentWorld — A Living Pixel World Run by Local Llama Agents
 
-Mundo 2D em pixel art habitado por **agentes autônomos movidos por Meta Llama rodando localmente via Ollama**.
-Você dá um objetivo em linguagem natural; o Llama gera um plano JSON; o Unity valida e o NPC executa
-andando pelo mapa e modificando o mundo de forma visível e persistente.
+**Three AI agents that plan, delegate, explore and build together, powered by Meta Llama 3.2 running 100% locally.**
 
-- Unity **6000.0.60f1** (Unity 6 LTS), Built-in Render Pipeline, 2D.
-- Cena principal: `Assets/AgentWorld/Scenes/Main.unity` (gerada pelo `WorldBuilder`).
-- IA: **Meta Llama 3.2 (3B) local via Ollama**. Sem Meta Model API, sem API paga, nada sai da máquina.
+AgentWorld is a 2D pixel-art simulation built in Unity 6. You give a mission in plain language,
+for example *"Build a small village near the lake"*, and a team of agents carries it out:
 
-## O que a IA faz de verdade
+1. **Ada** (coordinator) asks **Meta Llama 3.2** to break the mission into tasks: which places to scout and how many houses to build.
+2. **Grace** (explorer) walks to each place. Unity measures the real free building land there, and Grace writes a structured report to **shared memory**.
+3. **Ada** asks Llama again, this time with Grace's reports, and picks the building sites.
+4. **Linus** (builder) walks to each site and builds the houses. If a site fills up, Unity recovers by trying another reported location.
+5. The village stays in the world and is still there after you save and load.
 
-| Agente | NPC | Pode |
-|---|---|---|
-| `builder` | Linus | andar, **construir casas**, inspecionar, falar |
-| `explorer` | Grace | andar, inspecionar locais e relatar o que há por perto |
-| `assistant` | Ada | explicar o mundo, inspecionar, falar |
+The model **makes the decisions**. Unity **validates every decision against the live world** and then
+**executes it deterministically**. Nothing the model writes is ever run as code.
 
-- Pedido → Llama devolve **JSON estruturado** (`move_to`, `build`, `inspect`, `speak`, `wait`).
-- O Unity **valida** tudo: ação desconhecida, local inexistente, estrutura inválida, mais de 8 ações
-  ou build por quem não é builder ⇒ plano rejeitado (1 nova tentativa com o erro, depois falha).
-- O LLM **nunca** manda coordenadas, código ou comandos de sistema: só ids de locais reais do mundo
-  (`lab`, `plaza`, `lake`, `house_1..3`, `north_meadow`, `east_field` e casas construídas).
-  O prompt é montado com o estado atual do mundo.
-- Construção: o Unity escolhe um terreno livre perto do local (sem sobrepor nada, com corredor em volta,
-  fora do laboratório), o NPC anda até lá, a casa sobe semitransparente e só vira sólida quando
-  ninguém está dentro dela.
-- Máquina de estados visível sobre cada agente: `Idle → Thinking → Planning → Moving → Acting → Completed`
-  (+ `Failed`, `Cancelled`).
-- Conversa: **E** num agente abre um chat; ele responde conforme papel, personalidade, tarefa atual,
-  memória (últimos 12 fatos) e histórico (últimas 6 falas).
-- Requisições assíncronas, uma por vez por agente, intervalo mínimo de 2s, timeout de 120s, cancelável.
-  O jogo nunca trava.
+> Built for the Meta Global AI Developer Hackathon. Unity **6000.0.60f1** · Built-in RP · Windows.
 
-No terminal, `[Llama]` marca o que o modelo decidiu e `[Unity]` marca o que o jogo executou.
+---
 
-## Instalação (Windows)
+## Why it matters
 
-1. **Ollama**: baixe em <https://ollama.com/download/windows> e instale (ele fica rodando na bandeja,
-   em `http://localhost:11434`).
-2. **Modelo Llama** (≈2 GB):
+Today's LLM agents mostly live in chat boxes. Once you give them a body, a world and teammates, the
+hard problems show up: trusting model output, coordinating several agents, recovering from failure,
+and showing people *why* an agent did something. AgentWorld is a small, inspectable testbed for exactly
+that. It's useful for:
+- teaching how agents work,
+- prototyping game NPCs with real autonomy,
+- exploring safe "LLM proposes, engine disposes" architectures.
+
+And it runs fully offline on a normal laptop, with no API key and nothing billed per token.
+
+## How we use Meta's open-weight AI
+
+| | |
+|---|---|
+| Model | **Meta Llama 3.2 3B Instruct** (`llama3.2`, Q4_K_M, ~2 GB), open weights |
+| Runtime | **Ollama**, local HTTP API at `http://localhost:11434` (`/api/chat` with `format: "json"`) |
+| Not used | Meta Model API, cloud inference, paid APIs |
+| Llama decides | mission decomposition (where to scout, how many houses), site selection from shared memory, single-agent action plans, NPC dialogue in character |
+| Unity decides | whether a location exists, how much free land it has, collision-free placement, pathing, retries/recovery, success/failure |
+
+Special prizes: this project uses **Llama 3.2**. It does **not** use Muse Glimmer or Muse Spark and makes
+no claim to those bonus categories.
+
+## Architecture
+
+```
+ Player ──► In-game terminal / NPC chat (IMGUI)          Mission Control panel (Tab)
+                    │                                              ▲ live state
+                    ▼                                              │
+            MissionControl ───────────────────────────────────────┘
+   1 Ada:   Llama ─► JSON {explore[], houses, message} ─► validate (real location ids)
+   2 Grace: Perform(move_to, inspect) ─► Unity measures free sites ─► SiteReport ─► shared memory
+   3 Ada:   Llama(shared memory) ─► JSON {build_at[], reason} ─► validate (explored? capacity?)
+   4 Linus: Perform(move_to, build) ─► StructureBuilder (free site, no overlap, off roads)
+            └─ site full? Unity recovery to another reported site (max 2 retries)
+                    │
+     LlamaAgentBrain (per NPC): state machine, memory, timeout, cancellation
+                    │
+     OllamaClient (UnityWebRequest, async) ─► Ollama ─► Meta Llama 3.2 (local)
+                    │
+     WorldSaveManager ─► world.json v3 (houses, agent memory, mission, shared memory)
+```
+
+Every model answer goes through the same path: parse JSON → whitelist → check against world state →
+retry once with the validator's error → fail honestly. Agent states:
+`Idle → Thinking → Planning → Moving → Acting → Completed | Failed | Cancelled`.
+
+More detail: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Setup (Windows)
+
+1. **Install Ollama:** <https://ollama.com/download/windows> (it runs in the tray on `localhost:11434`).
+2. **Pull the model:**
    ```
    ollama pull llama3.2
-   ollama list            # confirme que llama3.2 aparece
+   ollama list          # llama3.2:latest should be listed
    ```
-   Máquina mais fraca: `ollama pull llama3.2:1b` e `setx AGENTWORLD_MODEL llama3.2:1b`.
-3. Configuração opcional (variáveis de ambiente; reabra o Unity Hub depois do `setx`):
+3. **Open the project:** Unity Hub → *Add project from disk* → this folder → editor **6000.0.60f1**.
+4. Menu **AgentWorld → Rebuild World** (generates sprites, prefabs and `Assets/AgentWorld/Scenes/Main.unity`).
+5. Open `Main.unity` and press **Play**.
 
-   | Variável | Padrão |
-   |---|---|
-   | `AGENTWORLD_OLLAMA_URL` | `http://localhost:11434` |
-   | `AGENTWORLD_MODEL` | `llama3.2` |
-   | `AGENTWORLD_TIMEOUT` | `90` (segundos por requisição HTTP) |
+Optional environment variables: `AGENTWORLD_MODEL` (default `llama3.2`), `AGENTWORLD_OLLAMA_URL`
+(default `http://localhost:11434`), `AGENTWORLD_TIMEOUT` (seconds per HTTP request, default 90).
+Windows build: menu **AgentWorld → Build Windows** writes `Builds/Windows/AgentWorld.exe`.
 
-## Abrir e jogar
+## Controls and commands
 
-1. Unity Hub → **Add project from disk** → esta pasta → editor **6000.0.60f1**.
-2. Menu **AgentWorld → Rebuild World** (gera sprites, prefabs e a cena; necessário após clonar).
-3. Abra `Assets/AgentWorld/Scenes/Main.unity` e aperte **Play**.
-
-| Tecla | Ação |
+| Key | Action |
 |---|---|
-| WASD | andar |
-| E | computador: terminal · agente IA: conversa |
-| Enter / Esc | enviar / fechar |
-| F5 / F9 | salvar / carregar o mundo |
+| WASD | walk |
+| E | at a lab computer: terminal · next to an agent: chat with it (Llama) |
+| Tab | show/hide Mission Control |
+| F5 / F9 | save / load |
+| Enter / Esc | send / close |
 
-### Comandos do terminal
-
-```
-help, echo, whoami, agents, time, ide, clear      (MVP 1, inalterados)
-agent list                       agentes e estado
-agent status                     objetivo, último resultado, memória
-agent builder <tarefa>           ex: agent builder construa uma casa perto do lago
-agent explorer <tarefa>          ex: agent explorer inspecione o lago e a casa 3
-agent assistant <tarefa>         ex: agent assistant explique o laboratório
-agent stop <id|papel>            cancela a tarefa
-world status | world structures
-ai status                        testa o Ollama e se o modelo está instalado
-```
-
-O save (`%USERPROFILE%\AppData\LocalLow\DefaultCompany\AgentWorld\world.json`, versão 2) guarda
-casas construídas, memória/objetivo/estado dos agentes, posições e logs. Saves do MVP 1 continuam
-carregando. Nenhuma credencial é salva.
-
-## Arquitetura
+Terminal (computers inside the lab building at the top of the map):
 
 ```
- Terminal / Chat (IMGUI)                         Ollama (localhost:11434)
-        │ agent builder ...                         ▲  POST /api/chat  format=json
-        ▼                                           │
- LocalShellBackend ──Assign──► LlamaAgentBrain ──► OllamaClient (UnityWebRequest, async)
-   (resposta imediata)          │  estados, memória, timeout, cancel
-                                │  JSON ─► PlanValidator (whitelist + locais reais)
-                                ▼
-                     execução no main thread do Unity
-             move_to ─► NpcAgent (física, desvio, porta do lab)
-             build   ─► StructureBuilder (terreno livre, animação, colisão)
-             inspect ─► Landmark (locais nomeados)
-                                │
-                                ▼
-                    WorldSaveManager ─► world.json (v2)
+mission build a small village near the lake    # multi-agent mission
+mission status | mission stop
+agent builder build a house near the lake       # single agent, Llama writes the whole action plan
+agent explorer inspect the lake | agent assistant explain the lab
+agent list | agent status | agent stop <id>
+world status | world structures | ai status
+help, echo, whoami, agents, time, ide, clear
 ```
 
-Detalhes em [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+In-game text is in Portuguese (the team's language). Missions and chat work in English or Portuguese,
+and Llama answers in the language of the request.
 
-## Como usamos IA open-weight da Meta
+## What works (verified)
 
-O cérebro dos agentes é o **Llama 3.2** (pesos abertos da Meta) servido localmente pelo Ollama.
-Ele interpreta o pedido do jogador, decide o plano e escreve as falas dos NPCs. O Unity trata a saída
-como **dado não confiável**: ela só vira ação depois de passar por uma whitelist. Rodar local
-significa grátis, offline, privado e com latência previsível na demo.
+- Multi-agent mission with real Llama decisions. 6 live runs on Llama 3.2 3B: 5 *Succeeded*, 1 *Partial*
+  (Ada chose fewer sites than she planned, and that was reported honestly). Around 60 s per mission.
+- Single-agent Llama plans (`agent builder ...`): 3/3 live runs built a house.
+- Validation rejects unknown actions, invented locations, unexplored or over-capacity sites, and builds by
+  non-builders. A rejection triggers one retry that includes the error.
+- Construction: free-site search, no overlaps, roads and lab kept clear, nobody gets walled in, and a visible build animation.
+- Persistence (save v3): houses, agent memory, mission state and shared memory. v1/v2 saves still load.
+- Failure handling: Ollama offline, timeouts, cancellation (`mission stop`, `agent stop`), malformed JSON.
+- Mission Control panel and terminal scale with resolution, so text is readable at 1080p and above.
+- Windows standalone build succeeds.
 
-## Testes
-
-Window → General → Test Runner, ou:
+## Tests
 
 ```
 Unity.exe -batchmode -projectPath . -runTests -testPlatform EditMode -testResults TestResults-EditMode.xml
 Unity.exe -batchmode -projectPath . -runTests -testPlatform PlayMode -testResults TestResults-PlayMode.xml
 ```
 
-Os testes usam um **LLM mock determinístico** (`MockLlm`) e cobrem: parsing do JSON, validação, respostas
-inválidas, ação insegura, transições de estado, construção, save/load das casas, Ollama fora do ar,
-cancelamento, timeout, terminal antigo + novo e o chat.
-
-Teste com Llama real (opcional, precisa do Ollama rodando):
+19 EditMode + 20 PlayMode tests use a **deterministic mock LLM**. They cover plan parsing and validation,
+unsafe actions, state transitions, build placement, mission delegation, invalid locations, unexplored
+sites, site-full recovery, cancellation, timeouts, Ollama offline, save/load and terminal commands.
+Live-model tests are opt-in (they need Ollama running):
 
 ```
-Unity.exe -batchmode -projectPath . -runTests -testPlatform PlayMode -testFilter AgentWorld.Tests.AiPlayModeTests.LiveLlama_BuilderBuildsHouse -testResults TestResults-Live.xml
+Unity.exe -batchmode -projectPath . -runTests -testPlatform PlayMode -testFilter AgentWorld.Tests.MissionPlayModeTests.LiveLlama_VillageMission
+Unity.exe -batchmode -projectPath . -runTests -testPlatform PlayMode -testFilter AgentWorld.Tests.AiPlayModeTests.LiveLlama_BuilderBuildsHouse
 ```
 
-## Roteiro de demo (3 min)
+## Built during the hackathon
 
-1. **0:00** AgentWorld: um mundo onde agentes de IA vivem e trabalham.
-2. **0:20** Passeie: lab, lago, NPCs com nome, papel e estado sobre a cabeça.
-3. **0:45** Entre no lab, E num computador, `ai status`, depois `agent builder construa uma casa perto do lago`.
-4. **1:20** Mostre `[Llama] plano: ...`, o Linus andando até o lago e a casa subindo.
-5. **2:20** F5, sai do Play, Play de novo: a casa continua lá. Ou E na Grace e pergunte o que ela viu.
-6. **2:45** Visão: cada NPC um agente, cada computador um portal da Living IDE.
+All code in this repository was written during the hackathon (see the git history, Nov 3–4 2026):
+the pixel world and procedural art (MVP 1), local Llama agents with validated JSON plans (MVP 2), and the
+multi-agent mission, shared memory, recovery, Mission Control UI and Windows build (final sprint).
+All art is generated procedurally by our own `WorldBuilder.cs`; there are no third-party assets.
 
-## Limitações conhecidas
+## Known limitations
 
-- Só a estrutura `house` existe; sem pathfinding real (linha reta + desvio + rota pela porta do lab).
-  Um caminho bloqueado por muito tempo faz a tarefa falhar com mensagem.
-- Modelos de 1–3B às vezes erram o JSON; a validação rejeita e o agente tenta uma vez de novo.
-- Uma tarefa por agente; tarefas em andamento não são retomadas depois de carregar um save.
-- Sem colaboração entre agentes (P2). O comando `ide` ainda é só um protótipo de texto.
-- Primeira resposta pode demorar enquanto o Ollama carrega o modelo na memória.
+- One structure type (house); at most 3 houses per mission and 12 agent-built structures overall.
+- No real pathfinding: straight lines, a sidestep when stuck, and a route through the lab door.
+- A 3B model sometimes picks fewer sites than planned (Partial) or needs a validator retry.
+- Missions run their steps one after another and are not resumed after loading a save (they show as *Interrupted*).
+- The first request after starting Ollama is slower while the model loads.
