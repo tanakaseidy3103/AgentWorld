@@ -48,7 +48,7 @@ namespace AgentWorld.Tests
             var shell = new LocalShellBackend();
             StringAssert.Contains("echo", shell.Execute("help", null));
             Assert.AreEqual("ola mundo", shell.Execute("echo ola mundo", null));
-            StringAssert.StartsWith("comando desconhecido", shell.Execute("rm -rf", null));
+            StringAssert.StartsWith("unknown command", shell.Execute("rm -rf", null));
         }
 
         [Test]
@@ -73,7 +73,7 @@ namespace AgentWorld.Tests
         [Test]
         public void Prefabs_AreValid()
         {
-            foreach (var name in new[] { "Player", "Computer", "Tree", "House_0", "Npc_Ada", "Npc_Linus", "Npc_Grace" })
+            foreach (var name in new[] { "Player", "Computer", "Tree", "Tree_Pine", "Farm", "House_0", "Npc_Ada", "Npc_Linus", "Npc_Grace" })
             {
                 var p = AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/AgentWorld/Prefabs/{name}.prefab");
                 Assert.IsNotNull(p, name);

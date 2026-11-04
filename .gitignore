@@ -12,3 +12,16 @@
 *.user
 *.pidb
 *.tmp
+/*.log
+/Assets/AgentWorld/Art*
+/Assets/AgentWorld/Prefabs*
+/Assets/AgentWorld/Scenes*
+/.vscode/
+
+# Secrets and local captures (never commit)
+.env*
+*.pem
+*.key
+*.pfx
+/[Mm]emoryCaptures/
+/[Rr]ecordings/

@@ -11,8 +11,22 @@ namespace AgentWorld.EditorTools
 {
     /// Generates pixel-art sprites, prefabs and the Main scene.
     /// Menu: AgentWorld > Rebuild World. Batch: -executeMethod AgentWorld.EditorTools.WorldBuilder.Build
+    [InitializeOnLoad]
     public static class WorldBuilder
     {
+        // Generated art/prefabs/scene are not in git: a fresh clone builds them on first editor load.
+        static WorldBuilder()
+        {
+            if (Application.isBatchMode) return;
+            EditorApplication.delayCall += () =>
+            {
+                if (File.Exists(ScenePath) || EditorApplication.isPlayingOrWillChangePlaymode) return;
+                Debug.Log("AgentWorld: first run, generating the world...");
+                Build();
+                EditorSceneManager.OpenScene(ScenePath);
+            };
+        }
+
         const string Root = "Assets/AgentWorld";
         const string ArtDir = Root + "/Art", PrefabDir = Root + "/Prefabs", SceneDir = Root + "/Scenes";
         public const string ScenePath = SceneDir + "/Main.unity";
@@ -20,16 +34,16 @@ namespace AgentWorld.EditorTools
         static readonly Vector2 Center = new Vector2(0.5f, 0.5f), Feet = new Vector2(0.5f, 0f);
         static readonly Color32 Clear = new Color32(0, 0, 0, 0);
 
-        struct NpcDef { public string id, name, role; public Color32 shirt, hair; public Vector2 home; public string[] lines; }
+        struct NpcDef { public string id, name, role, ai; public Color32 shirt, hair; public Vector2 home; public string[] lines; }
 
         static readonly NpcDef[] Npcs =
         {
-            new NpcDef { id = "ada", name = "Ada", role = "Arquiteta de Agentes", shirt = C(150, 80, 180), hair = C(70, 40, 30), home = new Vector2(-3, 7),
-                lines = new[] { "Este laboratório vai abrigar a Living IDE.", "Cada computador será um portal para um agente.", "Use E nos computadores para abrir o terminal." } },
-            new NpcDef { id = "linus", name = "Linus", role = "Engenheiro de Sistemas", shirt = C(70, 150, 90), hair = C(220, 190, 90), home = new Vector2(8, -6),
-                lines = new[] { "O kernel deste mundo ainda é simples, mas estável.", "Digite 'agents' num terminal para ver todos nós.", "Pressione F5 para salvar o mundo." } },
-            new NpcDef { id = "grace", name = "Grace", role = "Depuradora", shirt = C(200, 70, 70), hair = C(30, 30, 35), home = new Vector2(-7, 0),
-                lines = new[] { "Encontrei um bug... era uma mariposa!", "Testes primeiro, depois o deploy.", "Logo teremos agentes LLM conversando aqui." } },
+            new NpcDef { id = "ada", name = "Ada", role = "Coordinator", ai = "assistant", shirt = C(150, 80, 180), hair = C(70, 40, 30), home = new Vector2(-3, 7),
+                lines = new[] { "This lab will host the Living IDE.", "Every computer will be a portal to an agent.", "Press E at a computer to open the terminal." } },
+            new NpcDef { id = "linus", name = "Linus", role = "Builder", ai = "builder", shirt = C(70, 150, 90), hair = C(220, 190, 90), home = new Vector2(8, -6),
+                lines = new[] { "This world's kernel is still simple, but stable.", "Type 'agents' in a terminal to see all of us.", "Press F5 to save the world." } },
+            new NpcDef { id = "grace", name = "Grace", role = "Explorer", ai = "explorer", shirt = C(200, 70, 70), hair = C(30, 30, 35), home = new Vector2(-7, 0),
+                lines = new[] { "I found a bug... it was a moth!", "Tests first, then deploy.", "Soon LLM agents will be chatting here." } },
         };
 
         [MenuItem("AgentWorld/Rebuild World")]
@@ -43,7 +57,8 @@ namespace AgentWorld.EditorTools
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
             // --- Sprites -------------------------------------------------------
-            var grass = MakeSprite("grass", Tex(16, 16, (x, y) => Noise(x, y, 1) > .85f ? C(70, 140, 60) : Noise(x, y, 2) > .93f ? C(130, 195, 95) : C(86, 160, 72)), Center);
+            var grass = MakeSprite("grass", Tex(16, 16, (x, y) =>
+                Noise(x, y, 1) > .86f ? C(70, 140, 60) : Noise(x, y, 2) > .93f ? C(130, 195, 95) : Noise(x, y, 4) > .9f ? C(98, 172, 80) : C(86, 160, 72)), Center);
             var path = MakeSprite("path", Tex(16, 16, (x, y) => Noise(x, y, 3) > .88f ? C(170, 140, 100) : C(200, 170, 122)), Center);
             var floor = MakeSprite("lab_floor", Tex(16, 16, (x, y) => x == 0 || y == 0 ? C(150, 160, 175) : C(205, 212, 222)), Center);
             var wall = MakeSprite("lab_wall", Tex(16, 16, (x, y) => y % 4 == 0 || (x + (y / 4 % 2) * 4) % 8 == 0 ? C(60, 64, 80) : C(95, 105, 130)), Center);
@@ -52,25 +67,53 @@ namespace AgentWorld.EditorTools
             {
                 ['k'] = C(40, 44, 52), ['g'] = C(30, 90, 60), ['l'] = C(120, 240, 150), ['w'] = C(150, 105, 60), ['d'] = C(105, 70, 40),
             }), Feet);
+            var lakeFrames = new[] { MakeSprite("lake_0", LakeTex(0), Center), MakeSprite("lake_1", LakeTex(1), Center), MakeSprite("lake_2", LakeTex(2), Center) };
+            var shadow = MakeSprite("shadow", Tex(32, 10, (x, y) =>
+            {
+                float dx = (x - 15.5f) / 16f, dy = (y - 4.5f) / 5f;
+                return dx * dx + dy * dy <= 1f ? new Color32(20, 40, 20, 70) : Clear;
+            }), Center);
+            var pine = MakeSprite("tree_pine", PineTex(), Feet);
+            var decor = new[]
+            {
+                MakeSprite("flower_y", FlowerTex(C(255, 220, 80)), Feet), MakeSprite("flower_r", FlowerTex(C(240, 110, 120)), Feet),
+                MakeSprite("flower_w", FlowerTex(C(245, 245, 255)), Feet), MakeSprite("tuft", TuftTex(), Feet), MakeSprite("rock", RockTex(), Feet),
+            };
+            var farm = MakeSprite("farm", FarmTex(), Feet);
             var roofs = new[] { C(190, 70, 60), C(60, 110, 180), C(90, 150, 80) };
 
             // --- Prefabs -------------------------------------------------------
-            var playerPrefab = SavePrefab(MakeCharacter("Player", CharSprite("player", C(60, 110, 200), C(110, 70, 40)), true), "Player");
+            var go = MakeCharacter("Player", CharSprite("player", C(60, 110, 200), C(110, 70, 40)), true);
+            Shadow(go, shadow, 0.8f);
+            var playerPrefab = SavePrefab(go, "Player");
 
-            var go = Spr("Computer", computer, Vector2.zero, null, 0, null, true);
+            go = Spr("Computer", computer, Vector2.zero, null, 0, null, true);
             Box(go, new Vector2(1f, 0.5f), new Vector2(0, 0.25f));
             go.AddComponent<Computer>();
             var computerPrefab = SavePrefab(go, "Computer");
 
             go = Spr("Tree", tree, Vector2.zero, null, 0, null, true);
             Box(go, new Vector2(0.6f, 0.4f), new Vector2(0, 0.2f));
+            Shadow(go, shadow, 1.1f);
             var treePrefab = SavePrefab(go, "Tree");
+
+            go = Spr("Tree_Pine", pine, Vector2.zero, null, 0, null, true);
+            Box(go, new Vector2(0.5f, 0.4f), new Vector2(0, 0.2f));
+            Shadow(go, shadow, 0.9f);
+            var pinePrefab = SavePrefab(go, "Tree_Pine");
+
+            // Farm: walkable (trigger) so it never traps anyone, but still blocks other construction.
+            go = Spr("Farm", farm, Vector2.zero, null, -60, null, true);
+            Box(go, new Vector2(2.8f, 1.4f), new Vector2(0, 0.7f));
+            go.GetComponent<BoxCollider2D>().isTrigger = true;
+            var farmPrefab = SavePrefab(go, "Farm");
 
             var housePrefabs = new GameObject[roofs.Length];
             for (var i = 0; i < roofs.Length; i++)
             {
                 go = Spr("House", MakeSprite("house_" + i, HouseTex(roofs[i]), Feet), Vector2.zero, null, 0, null, true);
                 Box(go, new Vector2(2.8f, 1.4f), new Vector2(0, 0.7f));
+                Shadow(go, shadow, 3.4f);
                 housePrefabs[i] = SavePrefab(go, "House_" + i);
             }
 
@@ -78,9 +121,10 @@ namespace AgentWorld.EditorTools
             for (var i = 0; i < Npcs.Length; i++)
             {
                 var n = Npcs[i];
-                go = MakeCharacter("Npc_" + n.name, CharSprite("npc_" + n.id, n.shirt, n.hair), false);
+                go = MakeCharacter("Npc_" + n.name, CharSprite("npc_" + n.id, n.shirt, n.hair, n.ai == "builder" ? "hardhat" : n.ai == "explorer" ? "explorer" : "headset"), false);
+                Shadow(go, shadow, 0.8f);
                 var agent = go.AddComponent<NpcAgent>();
-                agent.id = n.id; agent.displayName = n.name; agent.role = n.role; agent.lines = n.lines;
+                agent.id = n.id; agent.displayName = n.name; agent.role = n.role; agent.agentRole = n.ai; agent.lines = n.lines;
                 npcPrefabs[i] = SavePrefab(go, "Npc_" + n.name);
             }
 
@@ -116,9 +160,39 @@ namespace AgentWorld.EditorTools
             var houses = new[] { new Vector2(-13, 4), new Vector2(13, 4), new Vector2(-12, -10) };
             for (var i = 0; i < houses.Length; i++) Place(housePrefabs[i], houses[i], world).name = "House_" + (i + 1);
 
+            var lakeGo = Spr("Lake", lakeFrames[0], new Vector2(-6, -7), world, -85);
+            lakeGo.AddComponent<SpriteFlipbook>().frames = lakeFrames;
+            Box(lakeGo, new Vector2(4.6f, 2.4f), Vector2.zero);
+
+            // Named places for the LLM agents; plans may only reference these ids.
+            var marks = new GameObject("Landmarks").transform;
+            marks.SetParent(world);
+            Mark(marks, "lab", "computer lab with 3 terminals (Living IDE)", new Vector2(0, 8), new Vector2(0, -2));
+            Mark(marks, "plaza", "crossroads in the middle of the village", new Vector2(0, -2), Vector2.zero);
+            Mark(marks, "lake", "small blue lake south-west of the plaza", new Vector2(-6, -7), new Vector2(0, 2.2f));
+            Mark(marks, "house_1", "red-roof house, west", houses[0], new Vector2(0, -1));
+            Mark(marks, "house_2", "blue-roof house, east", houses[1], new Vector2(0, -1));
+            Mark(marks, "house_3", "green-roof house, south-west", houses[2], new Vector2(0, -1));
+            Mark(marks, "north_meadow", "open meadow north-west, near the trees", new Vector2(-14, 9), Vector2.zero);
+            Mark(marks, "east_field", "open grass field east", new Vector2(14, -7), Vector2.zero);
+
             foreach (var t in new[] { new Vector2(-17, 12), new Vector2(-10, 13), new Vector2(10, 13), new Vector2(17, 12), new Vector2(-18, -1),
                          new Vector2(18, -3), new Vector2(-5, -12), new Vector2(6, -10), new Vector2(15, -12), new Vector2(-17, -13), new Vector2(9, 8) })
-                Place(treePrefab, t, world);
+                Place(Noise((int)t.x, (int)t.y, 21) > .5f ? pinePrefab : treePrefab, t, world);
+
+            // Flowers, tufts and rocks: deterministic scatter that avoids roads, lab, lake and houses.
+            var deco = new GameObject("Decorations").transform;
+            deco.SetParent(world);
+            var avoid = new List<Rect> { new Rect(-20, -3.5f, 40, 3), new Rect(-1.5f, -15, 3, 19), new Rect(-7, 3, 14, 10), new Rect(-9, -9, 6, 4.5f) };
+            foreach (var h in houses) avoid.Add(new Rect(h.x - 2, h.y - 0.5f, 4, 3));
+            for (var gx = -19; gx <= 19; gx++)
+            for (var gy = -14; gy <= 14; gy++)
+            {
+                if (Noise(gx, gy, 31) < .82f) continue;
+                var p = new Vector2(gx + Noise(gx, gy, 32) - .5f, gy + Noise(gx, gy, 33) - .5f);
+                if (avoid.Exists(r => r.Contains(p))) continue;
+                Spr("Decor", decor[(int)(Noise(gx, gy, 34) * decor.Length) % decor.Length], p, deco, -95);
+            }
 
             for (var i = 0; i < Npcs.Length; i++) Place(npcPrefabs[i], Npcs[i].home, null);
 
@@ -136,11 +210,25 @@ namespace AgentWorld.EditorTools
             var systems = new GameObject("Systems");
             systems.AddComponent<WorldSaveManager>();
             systems.AddComponent<TerminalUI>();
+            var sb = systems.AddComponent<StructureBuilder>();
+            sb.housePrefab = housePrefabs[0];
+            sb.farmPrefab = farmPrefab;
+            systems.AddComponent<InspectionMarkers>();
+            systems.AddComponent<MissionPanel>();
 
             EditorSceneManager.SaveScene(scene, ScenePath);
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
             AssetDatabase.SaveAssets();
             Debug.Log("AgentWorld: world built at " + ScenePath);
+        }
+
+        /// Windows standalone player into Builds/Windows. Batch: -executeMethod AgentWorld.EditorTools.WorldBuilder.BuildWindows
+        [MenuItem("AgentWorld/Build Windows")]
+        public static void BuildWindows()
+        {
+            var report = BuildPipeline.BuildPlayer(new[] { ScenePath }, "Builds/Windows/AgentWorld.exe", BuildTarget.StandaloneWindows64, BuildOptions.None);
+            Debug.Log($"AgentWorld: Windows build {report.summary.result} ({report.summary.totalSize / 1048576} MB)");
+            if (report.summary.result != UnityEditor.Build.Reporting.BuildResult.Succeeded && Application.isBatchMode) EditorApplication.Exit(1);
         }
 
         // --- Helpers -------------------------------------------------------------
@@ -158,6 +246,19 @@ namespace AgentWorld.EditorTools
             col.offset = new Vector2(0, 0.3f);
             if (player) { go.AddComponent<PlayerController>(); go.AddComponent<Interactor>(); }
             return go;
+        }
+
+        static void Shadow(GameObject go, Sprite shadow, float width)
+        {
+            var s = Spr("Shadow", shadow, Vector2.zero, go.transform, -50);
+            s.transform.localPosition = new Vector3(0, 0.05f, 0);
+            s.transform.localScale = new Vector3(width / 2f, width / 2f * 0.8f, 1);
+        }
+
+        static void Mark(Transform parent, string id, string description, Vector2 pos, Vector2 approach)
+        {
+            var lm = Child("Landmark_" + id, parent, pos).AddComponent<Landmark>();
+            lm.id = id; lm.description = description; lm.approach = approach;
         }
 
         static GameObject SavePrefab(GameObject go, string name)
@@ -263,12 +364,39 @@ namespace AgentWorld.EditorTools
             });
         }
 
-        static Sprite CharSprite(string name, Color32 shirt, Color32 hair) =>
-            MakeSprite(name, FromMap(CharacterMap, new Dictionary<char, Color32>
+        static Sprite CharSprite(string name, Color32 shirt, Color32 hair, string gear = null)
+        {
+            var tex = FromMap(CharacterMap, new Dictionary<char, Color32>
             {
                 ['o'] = C(40, 30, 30), ['h'] = hair, ['s'] = C(240, 200, 160), ['e'] = C(30, 30, 40),
                 ['c'] = shirt, ['p'] = C(50, 60, 90), ['b'] = C(60, 40, 30),
-            }), Feet);
+            });
+            Gear(tex, gear);
+            return MakeSprite(name, tex, Feet);
+        }
+
+        /// Role gear so the three agents read differently at a glance (y=15 is the top row).
+        static void Gear(Texture2D t, string gear)
+        {
+            void Px(int x, int y, Color32 c) => t.SetPixel(x, y, c);
+            switch (gear)
+            {
+                case "hardhat": // Linus, builder
+                    for (var x = 4; x <= 11; x++) { Px(x, 15, C(250, 200, 40)); Px(x, 14, C(235, 180, 30)); }
+                    for (var x = 3; x <= 12; x++) Px(x, 13, C(200, 150, 20));
+                    break;
+                case "explorer": // Grace, explorer
+                    for (var x = 5; x <= 10; x++) { Px(x, 15, C(150, 120, 70)); Px(x, 14, C(120, 95, 55)); }
+                    for (var x = 2; x <= 13; x++) Px(x, 13, C(170, 140, 85));
+                    break;
+                case "headset": // Ada, coordinator
+                    for (var x = 4; x <= 11; x++) Px(x, 15, C(45, 45, 55));
+                    Px(3, 11, C(60, 60, 75)); Px(3, 10, C(60, 60, 75)); Px(12, 11, C(60, 60, 75)); Px(12, 10, C(60, 60, 75));
+                    Px(13, 10, C(60, 60, 75)); Px(13, 9, C(120, 230, 160));
+                    break;
+            }
+            t.Apply();
+        }
 
         static readonly string[] CharacterMap =
         {
@@ -317,6 +445,56 @@ namespace AgentWorld.EditorTools
                 return Noise(x, y, 7) > .75f || dy < -4 ? C(40, 110, 50) : Noise(x, y, 8) > .9f ? C(110, 190, 90) : C(60, 140, 65);
             if (x >= 6 && x <= 9 && y <= 9) return x == 6 ? C(80, 50, 30) : C(115, 75, 45);
             return Clear;
+        });
+
+        // Lake frames differ only in where the ripples sit, so cycling them makes the water shimmer.
+        static Texture2D LakeTex(int frame) => Tex(80, 44, (x, y) =>
+        {
+            float dx = (x - 39.5f) / 40f, dy = (y - 21.5f) / 22f, d = dx * dx + dy * dy;
+            if (d > 1f) return Clear;
+            if (d > 0.9f) return Noise(x, y, 11) > .5f ? C(205, 185, 125) : C(185, 165, 108);   // sandy shore
+            if (d > 0.82f) return C(150, 200, 230);                                               // foam line
+            if ((x + 7 * y) % 41 == 0 && d < 0.6f) return C(70, 150, 80);                         // lily pads
+            if (Noise((x + frame * 3) / 3, y, 12) > .92f) return C(185, 225, 250);                // ripples
+            if (d < 0.25f) return C(35, 85, 160);
+            return d < 0.5f ? C(48, 105, 180) : C(65, 132, 202);
+        });
+
+        static Texture2D PineTex() => Tex(16, 26, (x, y) =>
+        {
+            if (x >= 7 && x <= 8 && y <= 6) return x == 7 ? C(80, 50, 30) : C(110, 72, 42);
+            var w = (26 - y) * 7 / 20 - (y % 6 == 5 ? 1 : 0);
+            if (y >= 5 && y <= 25 && Mathf.Abs(x - 7.5f) <= w)
+                return Mathf.Abs(x - 7.5f) > w - 1 ? C(25, 80, 45) : Noise(x, y, 9) > .85f ? C(70, 150, 80) : C(40, 110, 60);
+            return Clear;
+        });
+
+        static Texture2D FlowerTex(Color32 petal) => Tex(6, 6, (x, y) =>
+        {
+            if (x == 2 && y <= 2) return C(60, 130, 55);
+            if (y >= 3 && y <= 5 && x >= 1 && x <= 3 && !(x != 2 && y != 4)) return x == 2 && y == 4 ? C(250, 200, 60) : petal;
+            return Clear;
+        });
+
+        static Texture2D TuftTex() => Tex(6, 5, (x, y) => (x + y) % 2 == 0 && y <= 4 - Mathf.Abs(x - 2) / 2 ? C(60, 125, 50) : Clear);
+
+        static Texture2D RockTex() => Tex(6, 4, (x, y) =>
+        {
+            float dx = (x - 2.5f) / 3f, dy = (y - 1.2f) / 2f;
+            return dx * dx + dy * dy <= 1f ? (y >= 2 ? C(170, 170, 160) : C(125, 125, 120)) : Clear;
+        });
+
+        static Texture2D FarmTex() => Tex(48, 32, (x, y) =>
+        {
+            var fence = x <= 1 || x >= 46 || y <= 1 || y >= 30;
+            if (fence) return (x + y) % 6 < 2 ? C(150, 105, 60) : C(115, 78, 45);
+            var row = (y - 3) % 6;
+            if (row <= 2)
+            {
+                if (row == 1 && x % 5 == 2) return Noise(x, y, 41) > .7f ? C(235, 140, 40) : C(90, 180, 70); // pumpkins and sprouts
+                return C(120, 80, 50);
+            }
+            return C(150, 105, 65);
         });
 
         static Texture2D HouseTex(Color32 roof) => Tex(48, 40, (x, y) =>

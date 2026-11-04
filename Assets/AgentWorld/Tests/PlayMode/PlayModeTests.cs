@@ -41,7 +41,9 @@ namespace AgentWorld.Tests
             player.MoveInput = Vector2.zero;
             Assert.Greater(player.transform.position.x - start.x, 2f);
             yield return new WaitForSeconds(0.5f);
-            Assert.AreEqual(player.transform.position.x, Camera.main.transform.position.x, 0.2f);
+            // The camera keeps the player centered in the area left of Mission Control.
+            var shift = MissionPanel.ReservedWidth / 2f * (2f * Camera.main.orthographicSize / Screen.height);
+            Assert.AreEqual(player.transform.position.x + shift, Camera.main.transform.position.x, 0.2f);
         }
 
         [UnityTest]

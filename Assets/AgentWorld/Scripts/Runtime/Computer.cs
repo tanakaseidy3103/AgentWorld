@@ -11,7 +11,7 @@ namespace AgentWorld
         /// Swap for a Living IDE / LLM backend in MVP 2 without touching the UI.
         public ITerminalBackend Backend { get; set; } = new LocalShellBackend();
 
-        public string Prompt => "Usar computador " + id;
+        public string Prompt => "Use computer " + id;
 
         public void Interact(GameObject user) => TerminalUI.Open(this);
 
