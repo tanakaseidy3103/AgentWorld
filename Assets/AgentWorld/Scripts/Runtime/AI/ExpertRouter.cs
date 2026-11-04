@@ -1,0 +1,145 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using UnityEngine;
+
+namespace AgentWorld
+{
+    /// "Expert finder": Ada uses Llama to route a free-form request to the specialist who can handle it.
+    /// Llama only picks an intent from a fixed list; Unity executes it (mission, scouting, or a factual status answer).
+    public static class ExpertRouter
+    {
+        public static readonly (string role, string name, string skills)[] Profiles =
+        {
+            ("assistant", "Ada", "planning, coordination, task delegation, explaining the mission"),
+            ("explorer", "Grace", "exploration, terrain inspection, counting free building land"),
+            ("builder", "Linus", "construction of houses and farms, building feasibility, placement"),
+        };
+
+        public static readonly string[] Intents = { "mission", "scout", "status", "explain", "unsupported" };
+        public const string Supported = "construir casas e fazendas (mission ...), explorar/inspecionar locais (Grace), perguntar o que um agente está fazendo, explicar a missão atual";
+
+        [Serializable]
+        public class Route { public string intent, agent, reason, message; }
+
+        /// Last routing decision, for Mission Control.
+        public static string LastRoute { get; private set; } = "";
+        public static bool Busy { get; private set; }
+
+        public static bool Ask(string request, Action<string> output, out string error)
+        {
+            error = null;
+            if (string.IsNullOrWhiteSpace(request)) { error = "pedido vazio"; return false; }
+            if (Busy) { error = "Ada ainda está encaminhando o pedido anterior"; return false; }
+            if (AgentHub.Find("assistant") == null) { error = "Ada não está na cena"; return false; }
+            Busy = true;
+            _ = RouteAsync(request.Trim(), output ?? (_ => { }));
+            return true;
+        }
+
+        static async Task RouteAsync(string request, Action<string> output)
+        {
+            var ada = AgentHub.Find("assistant");
+            ada.Ai.Show(AgentStatus.Thinking, "escolhendo especialista");
+            try
+            {
+                var raw = await LlamaAgentBrain.WithTimeout(t => AgentHub.Llm.Chat(SystemPrompt(), $"{AgentHub.WorldSummary()}Player request: {request}", true, t), CancellationToken.None);
+                var route = Parse(raw, out var problem);
+                if (route == null) { output($"[Unity] Ada não conseguiu classificar o pedido ({problem}). Tente: {Supported}."); return; }
+                ada.Ai.MarkDecision();
+                var who = Profiles.FirstOrDefault(p => p.role == RoleOf(route));
+                LastRoute = $"\"{Trunc(request, 50)}\" → {route.intent}{(who.name != null ? " · " + who.name : "")}";
+                output($"[Llama/Ada] especialista: {route.intent}{(who.name != null ? $" → {who.name} ({who.skills})" : "")} | \"{route.reason}\"");
+                Execute(route, request, output);
+            }
+            catch (Exception e) { output($"[Unity] Ada indisponível: {e.Message}"); }
+            finally
+            {
+                ada.Ai.Show(AgentStatus.Idle, "");
+                Busy = false;
+            }
+        }
+
+        public static Route Parse(string raw, out string problem)
+        {
+            problem = null;
+            int a = (raw ?? "").IndexOf('{'), b = (raw ?? "").LastIndexOf('}');
+            if (a < 0 || b <= a) { problem = "resposta sem JSON"; return null; }
+            Route r;
+            try { r = JsonUtility.FromJson<Route>(raw.Substring(a, b - a + 1)); }
+            catch (Exception e) { problem = "JSON inválido: " + e.Message; return null; }
+            r.intent = (r.intent ?? "").Trim().ToLowerInvariant();
+            r.agent = (r.agent ?? "").Trim().ToLowerInvariant();
+            if (!Intents.Contains(r.intent)) { problem = $"intenção desconhecida '{r.intent}'"; return null; }
+            r.reason = Trunc(r.reason ?? "", 160);
+            r.message = Trunc(r.message ?? "", 200);
+            return r;
+        }
+
+        static void Execute(Route r, string request, Action<string> output)
+        {
+            switch (r.intent)
+            {
+                case "mission":
+                    output(MissionControl.Start(request, output, out var err) ? "[Unity] missão iniciada: Ada coordena, Grace explora, Linus constrói" : "[Unity] " + err);
+                    break;
+                case "scout":
+                    var grace = AgentHub.Find("explorer");
+                    output(grace.Ai.Assign(request, output, out var gerr) ? "[Unity] tarefa enviada para Grace" : "[Unity] " + gerr);
+                    break;
+                case "status":
+                    var target = AgentHub.Find(r.agent) ?? AgentHub.Agents.FirstOrDefault(n => request.ToLowerInvariant().Contains(n.displayName.ToLowerInvariant()));
+                    output(target == null ? Team() : Describe(target));
+                    break;
+                case "explain":
+                    output(MissionSummary());
+                    break;
+                default:
+                    var msg = string.IsNullOrWhiteSpace(r.message) ? "A equipe não sabe fazer isso." : r.message;
+                    AgentHub.Find("assistant").Say(msg);
+                    output($"[Ada] {msg} Posso ajudar com: {Supported}.");
+                    break;
+            }
+        }
+
+        // Status answers are built from live state, never from the model.
+        static string Describe(NpcAgent n) =>
+            $"[Unity] {n.displayName} ({n.RoleTitle}): {n.Activity}{(n.Ai.Detail != "" ? " - " + n.Ai.Detail : "")}. Objetivo: {(n.Ai.Goal == "" ? "-" : n.Ai.Goal)}. Último resultado: {(n.Ai.LastResult == "" ? "-" : n.Ai.LastResult)}.";
+
+        static string Team() => string.Join("\n", AgentHub.Agents.Select(Describe));
+
+        public static string MissionSummary()
+        {
+            var m = MissionControl.State;
+            if (m.status == "None") return "[Unity] Nenhuma missão ainda. Aperte M e descreva uma, ex: build a small village near the lake.";
+            var built = $"{m.housesBuilt}/{m.housesWanted} casas" + (m.farmsWanted > 0 ? $", {m.farmsBuilt}/{m.farmsWanted} fazenda" : "");
+            var reports = m.sharedMemory.Count == 0 ? "nenhum relatório" : string.Join(", ", m.sharedMemory.Select(r => $"{r.location}={r.freeSites} livres"));
+            return $"[Unity] Missão \"{m.objective}\": {m.status}. {built}. Relatórios da Grace: {reports}. {m.result}";
+        }
+
+        static string RoleOf(Route r) => r.intent switch
+        {
+            "scout" => "explorer",
+            "mission" => "builder",
+            "status" => AgentHub.Find(r.agent)?.agentRole ?? "",
+            _ => "assistant",
+        };
+
+        static string SystemPrompt() =>
+$@"You are Ada, the coordinator of three AI agents in AgentWorld. Route the player's request to the right specialist.
+Team skills:
+{string.Join("\n", Profiles.Select(p => $"- {p.name} ({p.role}): {p.skills}"))}
+The team can ONLY build houses and farms. It cannot build roads, bridges, castles or anything else, cannot change water or terrain, cannot demolish.
+Return ONLY JSON: {{""intent"":""<one of: mission, scout, status, explain, unsupported>"",""agent"":""<ada|grace|linus>"",""reason"":""<short>"",""message"":""<only for unsupported: one short sentence explaining why, in the player's language>""}}
+- mission: the player wants houses, farms or a village built (Ada plans, Grace scouts, Linus builds).
+- scout: find/inspect/explore places or land, without building.
+- status: asks what an agent is doing (set agent to that agent).
+- explain: asks about the current mission or what happened.
+- unsupported: anything the team cannot do.
+Examples: ""Build a small village near the lake"" -> mission. ""Find a safe place to build"" -> scout. ""Ask Grace to explore"" -> scout. ""What is Linus doing?"" -> status, agent linus. ""Explain the current mission"" -> explain. ""Build a bridge over the lake"" -> unsupported.";
+
+        static string Trunc(string s, int n) => s.Length > n ? s.Substring(0, n) : s;
+    }
+}

@@ -32,6 +32,8 @@ agentes IA (Llama local via Ollama):
                              ex: mission build a small village near the lake
   mission status | mission stop
 [Tab] mostra/esconde o painel Mission Control   [M] barra de missão
+frases livres (3+ palavras) vão para a Ada, que escolhe o especialista:
+  ex: Find a safe place to build | What is Linus doing? | Explain the current mission
 [Llama] = decisão do modelo   [Unity] = ação executada pelo jogo";
 
         public string Execute(string input, Computer host)
@@ -54,7 +56,11 @@ agentes IA (Llama local via Ollama):
                 case "world": return World(arg);
                 case "mission": return Mission(arg, host);
                 case "ai": return arg == "status" ? AiStatus(host) : "uso: ai status";
-                default: return $"comando desconhecido: {parts[0]} (digite help)";
+                default:
+                    // Free-form sentences go to Ada's specialist routing; short unknown words keep the old error.
+                    if (input.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).Length >= 3)
+                        return ExpertRouter.Ask(input, Print(host), out var rerr) ? "[Ada] escolhendo o especialista certo (Llama)..." : "erro: " + rerr;
+                    return $"comando desconhecido: {parts[0]} (digite help)";
             }
         }
 
@@ -152,7 +158,12 @@ agentes IA (Llama local via Ollama):
     public class MissionBackend : ITerminalBackend
     {
         public string Execute(string input, Computer host) =>
-            input.ToLowerInvariant() == "clear" ? LocalShellBackend.Clear : LocalShellBackend.Mission(input, host);
+            input.ToLowerInvariant() switch
+            {
+                "clear" => LocalShellBackend.Clear,
+                "status" or "stop" => LocalShellBackend.Mission(input, host),
+                _ => ExpertRouter.Ask(input, LocalShellBackend.Print(host), out var error) ? "[Ada] escolhendo o especialista certo (Llama)..." : "erro: " + error,
+            };
     }
 
     /// Chat window behind an AI NPC: every line goes to the LLM as conversation.
