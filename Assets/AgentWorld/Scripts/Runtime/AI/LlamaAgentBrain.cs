@@ -223,70 +223,35 @@ namespace AgentWorld
 $@"You are {Name}, the {Role} agent living in AgentWorld, a 2D pixel-art village. Personality: {Personality}.
 You act ONLY by returning one JSON object with this schema:
 {{""agent"":""{Role}"",""goal"":""<short goal>"",""actions"":[<action>, ...]}}
-Allowed actions (nothing else exists):
-{{""type"":""move_to"",""target"":""<location id>""}}
-{{""type"":""build"",""structure"":""house"",""location"":""<location id>""}}   (builder only; structure is ""house"" or ""farm"" (fenced crop field); builds next to that location)
-{{""type"":""inspect"",""target"":""<location id>""}}   (look around a location and report)
-{{""type"":""speak"",""message"":""<one short sentence>""}}
-{{""type"":""wait"",""seconds"":2}}
+Allowed actions (your skills; nothing else exists):
+{SkillLines}
 Rules:
 - At most 6 actions.
 - Valid location ids: {string.Join(", ", locations)}. Never invent ids or coordinates.
 - If the requested place does not exist, choose the most sensible valid id and say so in a speak action.
-- Include EVERY step needed to fully complete the request. {(Role == "builder" ? "Building only happens with a build action." : "You cannot build.")}
+- Include EVERY step needed to fully complete the request. {(AgentConfigs.Has(Role, "build_house") ? "Building only happens with a build action." : "You cannot build.")}
 - Write speak messages in the same language as the player's request.
 - Output JSON only.
-Example request ""{(Role == "builder" ? "build a house by the plaza" : "check the plaza")}"" ->
-{(Role == "builder"
+Example request ""{(AgentConfigs.Has(Role, "build_house") ? "build a house by the plaza" : "check the plaza")}"" ->
+{(AgentConfigs.Has(Role, "build_house")
     ? @"{""agent"":""builder"",""goal"":""Build a house near the plaza"",""actions"":[{""type"":""speak"",""message"":""On my way!""},{""type"":""move_to"",""target"":""plaza""},{""type"":""build"",""structure"":""house"",""location"":""plaza""},{""type"":""speak"",""message"":""The house is ready!""}]}"
     : $@"{{""agent"":""{Role}"",""goal"":""Inspect the plaza"",""actions"":[{{""type"":""move_to"",""target"":""plaza""}},{{""type"":""inspect"",""target"":""plaza""}},{{""type"":""speak"",""message"":""I checked the plaza.""}}]}}")}";
+
+        string SkillLines => string.Join("\n", AgentConfigs.SkillsFor(Role).Select(SkillRegistry.Get).Where(k => k != null).Select(k => $"{k.Example}   ({k.Description})"));
 
         string PlanUserPrompt(string goal) =>
             $"{AgentHub.WorldSummary()}Your recent memory:\n{(Memory.Count == 0 ? "- (nothing yet)" : string.Join("\n", Memory.Select(m => "- " + m)))}\nPlayer request: {goal}";
 
-        string Personality => Personalities.TryGetValue(Role, out var p) ? p : "helpful";
+        string Personality => AgentConfigs.For(npc.id)?.personality is string p && p != "" ? p : Personalities.TryGetValue(Role, out var d) ? d : "helpful";
 
         async Task Execute(AgentAction act, Action<string> say, CancellationToken ct)
         {
-            switch (act.type)
-            {
-                case "move_to":
-                    await MoveTo(Landmark.Find(act.target).StandPoint, act.target, ct);
-                    break;
-                case "build":
-                    var builder = StructureBuilder.Instance ?? throw new Exception("sistema de construção ausente");
-                    var lm = Landmark.Find(act.location);
-                    var site = builder.FindSite(lm.transform.position) ?? throw new Exception($"sem espaço livre perto de {act.location}");
-                    await MoveTo(site + new Vector2(0, -1.2f), "canteiro", ct);
-                    Set(AgentStatus.Acting, "construindo");
-                    say($"Construindo {act.structure} em ({site.x:0.#}, {site.y:0.#})...");
-                    var built = await builder.Construct(act.structure, site, Name, k => Detail = $"construindo {k * 100:0}%", ct);
-                    Remember($"Built {built.id} near {act.location}");
-                    say($"{built.id} pronta perto de {act.location}.");
-                    break;
-                case "inspect":
-                    var target = Landmark.Find(act.target);
-                    await MoveTo(target.StandPoint, act.target, ct);
-                    Set(AgentStatus.Acting, "inspecionando");
-                    var report = Inspect(target);
-                    Remember($"Inspected {act.target}: {report}");
-                    say(report);
-                    npc.Say(report);
-                    break;
-                case "speak":
-                    Set(AgentStatus.Acting, "falando");
-                    npc.Say(act.message);
-                    say($"\"{act.message}\"");
-                    await Awaitable.WaitForSecondsAsync(1.5f, ct);
-                    break;
-                case "wait":
-                    Set(AgentStatus.Acting, "esperando");
-                    await Awaitable.WaitForSecondsAsync(act.seconds, ct);
-                    break;
-            }
+            var skill = SkillRegistry.Get(SkillRegistry.IdFor(act)) ?? throw new Exception("skill desconhecida: " + act.type);
+            await skill.Execute(new SkillContext { Npc = npc, Brain = this, Action = act, Say = say }, ct);
         }
 
-        static string Inspect(Landmark target)
+        /// What an inspection sees at a landmark (nearby landmarks and people), from live scene data.
+        public static string Describe(Landmark target)
         {
             Vector2 p = target.transform.position;
             var near = Landmark.All.Where(l => l != target && Vector2.Distance(p, l.transform.position) < 7f).Select(l => l.id).OrderBy(s => s).ToList();
@@ -299,7 +264,7 @@ Example request ""{(Role == "builder" ? "build a house by the plaza" : "check th
         static readonly Rect LabInside = new Rect(-6f, 4f, 12f, 8f);
         static readonly Vector2 DoorIn = new Vector2(0, 5f), DoorOut = new Vector2(0, 2f);
 
-        async Task MoveTo(Vector2 dest, string label, CancellationToken ct)
+        internal async Task MoveTo(Vector2 dest, string label, CancellationToken ct)
         {
             Set(AgentStatus.Moving, "indo para " + label);
             var points = new List<Vector2>();
@@ -360,6 +325,9 @@ You cannot act during chat. If the player wants something done, tell them to typ
         // --- State ---------------------------------------------------------------
 
         void Set(AgentStatus s, string detail) { Status = s; Detail = detail ?? ""; }
+
+        /// For skill executors: show what the agent is doing right now.
+        internal void SetActivity(AgentStatus s, string detail) => Set(s, detail);
 
         /// Lets a mission show what an idle agent is doing (e.g. Ada thinking about the plan).
         public void Show(AgentStatus s, string detail) { if (!Busy) Set(s, detail); }

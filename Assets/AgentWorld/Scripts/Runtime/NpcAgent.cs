@@ -145,7 +145,8 @@ namespace AgentWorld
             }
         }
 
-        public string RoleTitle => agentRole switch { "assistant" => "Coordinator", "explorer" => "Explorer", "builder" => "Builder", _ => role };
+        public string RoleTitle => AgentConfigs.For(id)?.title is string t && t != "" ? t
+            : agentRole switch { "assistant" => "Coordinator", "explorer" => "Explorer", "builder" => "Builder", _ => role };
 
         /// One-word activity derived only from the brain's real state (no decorative states).
         public string Activity

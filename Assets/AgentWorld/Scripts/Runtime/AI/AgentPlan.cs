@@ -34,8 +34,6 @@ namespace AgentWorld
     public static class PlanValidator
     {
         public const int MaxActions = 8;
-        public static readonly string[] Actions = { "move_to", "speak", "build", "inspect", "wait" };
-        public static readonly string[] Structures = { "house", "farm" };
 
         public static AgentPlan Parse(string raw, out string error)
         {
@@ -53,47 +51,37 @@ namespace AgentWorld
             catch (Exception e) { error = "JSON inválido: " + e.Message; return null; }
         }
 
-        /// Normalizes location ids in place ("near_lake" -> "lake") and returns every problem found.
+        /// Checks every action against the skill registry, the agent's configured skills and the live
+        /// location list. Normalizes ids in place ("near_lake" -> "lake") and returns every problem found.
         public static List<string> Validate(AgentPlan plan, ICollection<string> locations, string role)
         {
             var errors = new List<string>();
             if (plan.actions.Count > MaxActions) errors.Add($"plano com {plan.actions.Count} ações (máx {MaxActions})");
+            var allowed = AgentConfigs.SkillsFor(role);
             for (var i = 0; i < plan.actions.Count; i++)
             {
                 var act = plan.actions[i];
                 var at = $"ação {i + 1}";
-                if (act == null || !Actions.Contains(act.type = act.type?.Trim().ToLowerInvariant()))
+                if (act != null)
                 {
-                    errors.Add($"{at}: tipo desconhecido '{act?.type}'");
+                    act.type = act.type?.Trim().ToLowerInvariant();
+                    act.structure = act.structure?.Trim().ToLowerInvariant();
+                }
+                var id = SkillRegistry.IdFor(act);
+                var skill = SkillRegistry.Get(id);
+                if (skill == null)
+                {
+                    errors.Add(act?.type == "build" ? $"{at}: estrutura inválida '{act.structure}'" : $"{at}: tipo desconhecido '{act?.type}'");
                     continue;
                 }
-                switch (act.type)
-                {
-                    case "move_to":
-                    case "inspect":
-                        act.target = Loc(act.target);
-                        if (!locations.Contains(act.target)) errors.Add($"{at}: local inválido '{act.target}'");
-                        break;
-                    case "build":
-                        if (role != "builder") errors.Add($"{at}: só o builder pode construir");
-                        act.structure = act.structure?.Trim().ToLowerInvariant();
-                        if (!Structures.Contains(act.structure)) errors.Add($"{at}: estrutura inválida '{act.structure}'");
-                        act.location = Loc(string.IsNullOrEmpty(act.location) ? act.target : act.location);
-                        if (!locations.Contains(act.location)) errors.Add($"{at}: local inválido '{act.location}'");
-                        break;
-                    case "speak":
-                        if (string.IsNullOrWhiteSpace(act.message)) errors.Add($"{at}: speak sem mensagem");
-                        else if (act.message.Length > 200) act.message = act.message.Substring(0, 200);
-                        break;
-                    case "wait":
-                        if (act.seconds <= 0 || act.seconds > 10) act.seconds = Mathf.Clamp(act.seconds, 0.5f, 10f);
-                        break;
-                }
+                if (!allowed.Contains(id)) errors.Add($"{at}: {role} não tem a skill '{id}'");
+                var problem = skill.Validate(act, locations);
+                if (problem != null) errors.Add($"{at}: {problem}");
             }
             return errors;
         }
 
-        static string Loc(string s)
+        public static string Loc(string s)
         {
             s = (s ?? "").Trim().Trim('<', '>', '"', '\'', ' ').ToLowerInvariant().Replace(' ', '_');
             return s.StartsWith("near_") ? s.Substring(5) : s;
