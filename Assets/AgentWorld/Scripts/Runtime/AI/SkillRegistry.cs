@@ -126,7 +126,7 @@ namespace AgentWorld
                         var builder = StructureBuilder.Instance ?? throw new Exception("construction system missing");
                         var lm = Landmark.Find(c.Action.location);
                         var site = builder.FindSite(lm.transform.position) ?? throw new Exception($"no free space near {c.Action.location}");
-                        await c.Brain.MoveTo(site + new Vector2(0, -1.2f), "canteiro", ct);
+                        await c.Brain.MoveTo(builder.StandPoint(site), "the construction site", ct);
                         c.Brain.SetActivity(AgentStatus.Acting, "building");
                         c.Say($"Building a {type} at ({site.x:0.#}, {site.y:0.#})...");
                         var built = await builder.Construct(type, site, c.Npc.displayName, k => c.Brain.SetActivity(AgentStatus.Acting, $"building {k * 100:0}%"), ct);

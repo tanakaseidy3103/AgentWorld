@@ -38,6 +38,17 @@ namespace AgentWorld
             return Physics2D.OverlapBox(feet + FootOffset, Footprint + Vector2.one * margin, 0f) == null;
         }
 
+        static readonly Vector2[] StandOffsets = { new Vector2(0, -1.2f), new Vector2(-2.1f, 0.5f), new Vector2(2.1f, 0.5f), new Vector2(0, 2.6f) };
+
+        /// Where the builder stands while building: the first side of the site not inside a wall, lake or house.
+        /// (Below the site used to be the only option and could fall inside the lake, so the builder never arrived.)
+        public Vector2 StandPoint(Vector2 site)
+        {
+            foreach (var o in StandOffsets)
+                if (!Physics2D.OverlapCircleAll(site + o, 0.35f).Any(h => !h.isTrigger && h.attachedRigidbody == null)) return site + o;
+            return site + StandOffsets[0];
+        }
+
         /// Nearest free spot to `near`, searched in rings; null when the area is full.
         public Vector2? FindSite(Vector2 near)
         {

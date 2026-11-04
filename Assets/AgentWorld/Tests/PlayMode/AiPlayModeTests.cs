@@ -147,6 +147,22 @@ namespace AgentWorld.Tests
             // Any NullReferenceException logged during these frames fails the test (Unity Test Framework).
         }
 
+        /// Regression: the builder's stand point for lake/house sites was inside the lake or a house collider,
+        /// so Linus could only arrive by luck (intermittent Builder_BuildsHouseNearLake failures).
+        [UnityTest]
+        public IEnumerator EveryBuildSite_HasAReachableStandPoint()
+        {
+            yield return null;
+            foreach (var lm in Landmark.All.ToList())
+            {
+                var site = structures.FindSite(lm.transform.position);
+                if (site == null) continue;
+                var stand = structures.StandPoint(site.Value);
+                var blocker = Physics2D.OverlapCircleAll(stand, 0.35f).FirstOrDefault(h => !h.isTrigger && h.attachedRigidbody == null);
+                Assert.IsNull(blocker, $"{lm.id}: stand point {stand} is inside {(blocker ? blocker.name : "")}");
+            }
+        }
+
         [UnityTest]
         public IEnumerator InvalidLlmResponse_RetriesOnce_ThenFails()
         {
