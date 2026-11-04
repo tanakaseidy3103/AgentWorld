@@ -21,6 +21,7 @@ namespace AgentWorld
             Id = "count_people",
             Name = "Count people",
             Origin = "custom (CustomSkills.cs)",
+            ReportsResult = true, // speech in the same plan must use this measured count
             Description = "Walk to a location and count the other characters within 5 units of it.",
             Roles = new[] { "explorer", "assistant" },
             Parameters = new[] { "target: location id" },

@@ -126,6 +126,7 @@ namespace AgentWorld
 
         void OnGUI()
         {
+            if (SkillLibraryPanel.Visible) return; // the library is modal; world labels would draw over it
             var cam = Camera.main;
             if (cam == null) return;
             var p = cam.WorldToScreenPoint(transform.position + Vector3.up * 1.15f);

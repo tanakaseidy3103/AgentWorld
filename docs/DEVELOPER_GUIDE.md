@@ -173,6 +173,7 @@ public static Skill CountPeople() => new Skill
     Id = "count_people",
     Name = "Count people",
     Origin = "custom (CustomSkills.cs)",
+    ReportsResult = true, // speech in the same plan must use this measured count
     Description = "Walk to a location and count the other characters within 5 units of it.",
     Roles = new[] { "explorer", "assistant" },
     Parameters = new[] { "target: location id" },
@@ -277,6 +278,12 @@ Unity.exe -batchmode -projectPath . -runTests -testPlatform PlayMode -testResult
   `LiveLlama_UnsupportedMission`, `LiveLlama_BuilderBuildsHouse` (run them with `-testFilter`).
 
 ## 8. Safety constraints
+
+- **Measured results come from Unity, not the model.** Skills with `ReportsResult = true` (`count_people`,
+  `report_findings`, `inspect`) return a `SkillResult`. In a plan that contains one, a `speak` action that states a
+  result (a number, "nobody", ...) is skipped if nothing has been measured yet in this task, and replaced by the
+  SkillResult Unity returned otherwise. Results are never carried over from earlier tasks, and a failed skill ends
+  the task before any later speech. Tests: `ResultReportingPlayModeTests`.
 
 - Only registered skills can run; unknown action types are rejected, and so is the whole plan (max 8 actions).
 - Only landmark ids that exist in the scene are accepted. The model never provides coordinates.

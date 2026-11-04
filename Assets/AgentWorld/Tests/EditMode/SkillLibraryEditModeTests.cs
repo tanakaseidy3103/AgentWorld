@@ -38,6 +38,17 @@ namespace AgentWorld.Tests
         }
 
         [Test]
+        public void ResultReporting_OnlyMeasuredResultsAreSpoken()
+        {
+            var measured = new SkillResult { SkillId = "count_people", Text = "2 people near lab, not counting me" };
+            Assert.IsNull(ResultReporting.Rewrite("There are 7 people in the lab.", null), "no measurement yet: skip");
+            Assert.AreEqual(measured.Text, ResultReporting.Rewrite("There are 7 people in the lab.", measured));
+            Assert.AreEqual(measured.Text, ResultReporting.Rewrite("Nobody is there.", measured));
+            Assert.AreEqual("Let me check the lab!", ResultReporting.Rewrite("Let me check the lab!", null), "speech without a result claim is kept");
+            Assert.IsTrue(SkillRegistry.Get("count_people").ReportsResult && SkillRegistry.Get("report_findings").ReportsResult);
+        }
+
+        [Test]
         public void Availability_DistinguishesRoleFromConfiguration()
         {
             var s = SkillRegistry.Get("count_people");

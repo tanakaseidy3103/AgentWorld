@@ -140,10 +140,30 @@ namespace AgentWorld
 
         async Task ExecuteAll(List<AgentAction> actions, Action<string> output, Action<string> say, CancellationToken ct)
         {
+            // Speech in a measuring plan reports only the SkillResult of this task, never a model prediction.
+            var measures = actions.Any(a => SkillRegistry.Get(SkillRegistry.IdFor(a))?.ReportsResult == true);
+            SkillResult latest = null;
             for (var i = 0; i < actions.Count; i++)
             {
-                output($"[Unity] {i + 1}/{actions.Count} {actions[i]}");
-                await Execute(actions[i], say, ct);
+                var act = actions[i];
+                if (measures && act.type == "speak")
+                {
+                    var msg = ResultReporting.Rewrite(act.message, latest);
+                    if (msg == null)
+                    {
+                        output($"[Unity] {i + 1}/{actions.Count} speak skipped: Llama stated a result before any skill measured it (\"{act.message}\")");
+                        continue;
+                    }
+                    if (msg != act.message)
+                    {
+                        output($"[Unity] speak replaced by the measured {latest.SkillId} result (Llama wrote: \"{act.message}\")");
+                        act.message = msg;
+                    }
+                }
+                output($"[Unity] {i + 1}/{actions.Count} {act}");
+                var skill = SkillRegistry.Get(SkillRegistry.IdFor(act));
+                var text = await Execute(act, say, ct);
+                if (skill?.ReportsResult == true) latest = new SkillResult { SkillId = skill.Id, Text = text };
             }
         }
 
@@ -245,10 +265,10 @@ Example request ""{(AgentConfigs.Has(Role, "build_house") ? "build a house by th
 
         string Personality => AgentConfigs.For(npc.id)?.personality is string p && p != "" ? p : Personalities.TryGetValue(Role, out var d) ? d : "helpful";
 
-        async Task Execute(AgentAction act, Action<string> say, CancellationToken ct)
+        async Task<string> Execute(AgentAction act, Action<string> say, CancellationToken ct)
         {
-            var skill = SkillRegistry.Get(SkillRegistry.IdFor(act)) ?? throw new Exception("skill desconhecida: " + act.type);
-            await skill.Execute(new SkillContext { Npc = npc, Brain = this, Action = act, Say = say }, ct);
+            var skill = SkillRegistry.Get(SkillRegistry.IdFor(act)) ?? throw new Exception("unknown skill: " + act.type);
+            return await skill.Execute(new SkillContext { Npc = npc, Brain = this, Action = act, Say = say }, ct);
         }
 
         /// What an inspection sees at a landmark (nearby landmarks and people), from live scene data.

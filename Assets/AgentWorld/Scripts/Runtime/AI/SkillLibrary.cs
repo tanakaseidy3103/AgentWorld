@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 
 namespace AgentWorld
@@ -76,5 +77,28 @@ namespace AgentWorld
             if (a < 0 || b < a) return null;
             return guide.Substring(0, a + DocsBegin.Length) + "\n" + Markdown() + guide.Substring(b);
         }
+    }
+}
+
+namespace AgentWorld
+{
+    /// What a result-reporting skill actually returned in the current task (never from memory or earlier runs).
+    public class SkillResult
+    {
+        public string SkillId, Text;
+    }
+
+    /// Separates tool execution from reporting: in a plan that measures something, a speak action may not state
+    /// a result the model predicted. Before any measurement it is skipped; after one it is replaced by the
+    /// SkillResult Unity returned.
+    public static class ResultReporting
+    {
+        static readonly Regex Claim = new Regex(@"\d|\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|nobody|no one|none|empty)\b", RegexOptions.IgnoreCase);
+
+        public static bool ClaimsResult(string message) => Claim.IsMatch(message ?? "");
+
+        /// The message to speak, or null to skip it. latest must come from the current task only.
+        public static string Rewrite(string message, SkillResult latest) =>
+            !ClaimsResult(message) ? message : latest == null ? null : latest.Text.Length > 200 ? latest.Text.Substring(0, 200) : latest.Text;
     }
 }

@@ -33,6 +33,8 @@ namespace AgentWorld
         public Func<SkillContext, CancellationToken, Task<string>> Execute;
         /// "built-in" (SkillRegistry.cs) or where a custom skill comes from; shown in the Skill Library.
         public string Origin = "built-in";
+        /// True when Execute returns a measured result (a count, a description). Speech in the same plan must use it.
+        public bool ReportsResult;
     }
 
     /// An idea described in the docs that is NOT registered: agents cannot use it, and plans naming it are rejected.
@@ -92,7 +94,7 @@ namespace AgentWorld
 
             Register(new Skill
             {
-                Id = "inspect", Name = "Inspect", Roles = everyone,
+                Id = "inspect", Name = "Inspect", Roles = everyone, ReportsResult = true,
                 Description = "Walk to a location and describe what is nearby (landmarks, people).",
                 Parameters = new[] { "target: location id" },
                 Safety = "Read-only.",
@@ -113,7 +115,7 @@ namespace AgentWorld
 
             Register(new Skill
             {
-                Id = "report_findings", Name = "Report findings", Roles = new[] { "explorer" },
+                Id = "report_findings", Name = "Report findings", Roles = new[] { "explorer" }, ReportsResult = true,
                 Description = "Measure how many free building sites a location has right now and report it.",
                 Parameters = new[] { "target: location id" },
                 Safety = "Read-only; the number is computed by Unity, never by the model.",
