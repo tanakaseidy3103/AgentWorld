@@ -18,6 +18,10 @@ namespace AgentWorld
     {
         public string objective = "", status = "None", result = "";
         public int housesWanted, housesBuilt, farmsWanted, farmsBuilt;
+        // Evaluation metrics (measured, never estimated).
+        public string model = "", scenario = "";
+        public int invalidResponses, recoveries, dialogueFailures;
+        public float durationSeconds;
         public List<MissionTask> tasks = new List<MissionTask>();
         public List<SiteReport> sharedMemory = new List<SiteReport>();
         public List<string> log = new List<string>();
@@ -49,7 +53,13 @@ namespace AgentWorld
         static CancellationTokenSource cts;
         static Action<string> output = _ => { };
 
-        public static bool Start(string objective, Action<string> print, out string error)
+        /// Raised once per mission with the final state (evaluation hooks in here).
+        public static event Action<MissionState> Finished;
+        static float startedAt;
+
+        public static bool Start(string objective, Action<string> print, out string error) => Start(objective, print, null, out error);
+
+        public static bool Start(string objective, Action<string> print, string scenario, out string error)
         {
             error = null;
             if (string.IsNullOrWhiteSpace(objective)) { error = "missão vazia"; return false; }
@@ -57,8 +67,12 @@ namespace AgentWorld
             var team = new[] { "assistant", "explorer", "builder" }.Select(AgentHub.Find).ToArray();
             if (team.Any(a => a == null)) { error = "Ada, Grace e Linus precisam estar na cena"; return false; }
             if (team.Any(a => a.Ai.Busy)) { error = "um agente está ocupado; use agent stop"; return false; }
+            // The pipeline needs these skills; agents.json may have removed them.
+            foreach (var (role, skill) in new[] { ("explorer", "move_to"), ("explorer", "inspect"), ("builder", "move_to"), ("builder", "build_house") })
+                if (!AgentConfigs.Has(role, skill)) { error = $"{AgentHub.Find(role).displayName} não tem a skill '{skill}' (veja StreamingAssets/agents.json)"; return false; }
 
-            State = new MissionState { objective = objective.Trim(), status = "Planning", knowledge = Merge(State.knowledge, State.sharedMemory) };
+            State = new MissionState { objective = objective.Trim(), status = "Planning", knowledge = Merge(State.knowledge, State.sharedMemory), model = AgentHub.Llm.Model, scenario = scenario ?? "" };
+            startedAt = Time.realtimeSinceStartup;
             output = print ?? (_ => { });
             cts = new CancellationTokenSource();
             _ = Run(team[0], team[1], team[2], cts.Token);
@@ -146,6 +160,7 @@ namespace AgentWorld
                             var alt = State.sharedMemory.Where(r => r.location != target && builder.CountSites(Landmark.Find(r.location).transform.position) > 0)
                                 .OrderByDescending(r => choice.build_at.Contains(r.location)).Select(r => r.location).FirstOrDefault();
                             if (alt == null) break;
+                            State.recoveries++;
                             Log($"[Unity] recuperação: {target} sem espaço, tentando {alt}");
                             target = alt;
                         }
@@ -177,9 +192,11 @@ namespace AgentWorld
             {
                 foreach (var t in State.tasks.Where(t => t.status == "Running" || t.status == "Pending")) t.status = State.status == "Cancelled" ? "Cancelled" : "Failed";
                 ada.Ai.Show(AgentStatus.Idle, "");
+                State.durationSeconds = Time.realtimeSinceStartup - startedAt;
                 Log($"[Unity] Missão {State.status}: {State.result}");
                 ada.Say($"Missão {State.status}: {State.result}");
                 State.knowledge = Merge(State.knowledge, State.sharedMemory);
+                Finished?.Invoke(State);
                 cts?.Dispose();
                 cts = null;
             }
@@ -222,6 +239,7 @@ namespace AgentWorld
             catch (OperationCanceledException) { throw; }
             catch (Exception e)
             {
+                State.dialogueFailures++;
                 Log($"[Unity] {who.displayName} não respondeu ({e.Message}); a missão continua sem essa fala");
                 return null;
             }
@@ -264,6 +282,7 @@ namespace AgentWorld
                 catch (Exception e) { errors.Add("JSON inválido: " + e.Message); }
                 if (value != null) errors.AddRange(validate(value));
                 if (errors.Count == 0) return value;
+                State.invalidResponses++;
                 Log($"[Unity] resposta de {who} rejeitada (tentativa {attempt}/{MaxRetries}): {string.Join("; ", errors)}");
                 if (attempt >= MaxRetries) throw new Exception($"{who}: plano do LLM rejeitado após {attempt} tentativas");
                 feedback = $"\nYour previous answer was REJECTED: {string.Join("; ", errors)}. Return corrected JSON.";
@@ -304,7 +323,7 @@ Example: {{""feasible"":""yes"",""explore"":[""plaza"",""east_field""],""houses"
             if (d.explore.Count > MaxExplore) d.explore = d.explore.Take(MaxExplore).ToList();
             errors.AddRange(d.explore.Where(id => !Ids.Contains(id)).Select(id => $"local inválido '{id}'"));
             d.houses = Mathf.Clamp(d.houses, 0, MaxHouses);
-            d.farms = Mathf.Clamp(d.farms, 0, MaxFarms);
+            d.farms = Mathf.Clamp(d.farms, 0, AgentConfigs.Has("builder", "build_farm") ? MaxFarms : 0);
             if (d.houses + d.farms == 0) errors.Add("nada para construir: houses e farms são 0");
             if (d.message?.Length > 200) d.message = d.message.Substring(0, 200);
             return errors;

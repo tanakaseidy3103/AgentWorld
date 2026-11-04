@@ -39,6 +39,7 @@ namespace AgentWorld.Tests
         public void Cleanup()
         {
             MissionControl.Restore(null);
+            AgentConfigs.Reload();
             AgentHub.Llm = null;
             AgentHub.LlmTimeoutSeconds = 120f;
             File.Delete(WorldSaveManager.PathOverride);
@@ -274,6 +275,73 @@ namespace AgentWorld.Tests
             Assert.IsTrue(pc.log.Any(l => l.Contains("tarefa enviada para Grace")));
             pc.Submit("rm -rf");
             StringAssert.StartsWith("comando desconhecido", pc.log.Last());
+        }
+
+        [UnityTest]
+        public IEnumerator Config_WithoutBuildSkill_BlocksMission_Honestly()
+        {
+            AgentConfigs.Use(AgentConfigs.Parse(@"{""agents"":[
+                {""id"":""ada"",""role"":""assistant"",""skills"":[""speak""]},
+                {""id"":""grace"",""role"":""explorer"",""skills"":[""move_to"",""inspect""]},
+                {""id"":""linus"",""role"":""builder"",""skills"":[""move_to"",""speak""]}]}", out _));
+            AgentHub.Llm = Mock(Delegation("plaza", 1), Choice("plaza"));
+            Assert.IsFalse(MissionControl.Start("build a house", null, out var err));
+            StringAssert.Contains("build_house", err);
+            var output = new System.Collections.Generic.List<string>();
+            AgentHub.Llm = new MockLlm("{\"intent\":\"capabilities\",\"agent\":\"linus\",\"reason\":\"x\"}");
+            ExpertRouter.Ask("What can Linus build?", output.Add, out _);
+            while (ExpertRouter.Busy) yield return null;
+            Assert.IsTrue(output.Any(l => l.Contains("Linus (Builder) pode: move_to") && !l.Contains("build_house")), string.Join("\n", output));
+        }
+
+        [UnityTest]
+        public IEnumerator Grace_ReportFindingsSkill_MeasuresRealLand()
+        {
+            AgentHub.Llm = new MockLlm("{\"actions\":[{\"type\":\"report_findings\",\"target\":\"east_field\"}]}");
+            var grace = AgentHub.Find("explorer");
+            var output = new System.Collections.Generic.List<string>();
+            Assert.IsTrue(grace.Ai.Assign("how much land is free in the east field?", output.Add, out _));
+            var end = Time.time + 20f;
+            while (grace.Ai.Busy && Time.time < end) yield return null;
+            Assert.AreEqual(AgentStatus.Completed, grace.Ai.Status, string.Join("\n", output));
+            var expected = structures.CountSites(Landmark.Find("east_field").transform.position);
+            Assert.IsTrue(output.Any(l => l.Contains($"east_field: {expected} terrenos livres")), string.Join("\n", output));
+        }
+
+        [UnityTest]
+        public IEnumerator Eval_Run_WritesMeasuredReport()
+        {
+            AgentHub.Llm = Mock(Delegation("plaza", 1), Choice("plaza"));
+            var output = new System.Collections.Generic.List<string>();
+            Assert.IsTrue(Evaluation.Run("village", output.Add, out var err), err);
+            yield return WaitMission();
+            yield return null;
+            var r = Evaluation.LastReport;
+            Assert.IsNotNull(r);
+            Assert.AreEqual("village", r.scenario);
+            Assert.AreEqual("mock-llama", r.model, "mock runs are labelled, never reported as Llama");
+            Assert.IsTrue(r.passed);
+            Assert.Greater(r.durationSeconds, 0f);
+            Assert.IsTrue(System.IO.File.Exists(Evaluation.LastPath));
+            Assert.IsTrue(output.Any(l => l.StartsWith("AgentWorld Evaluation")));
+            System.IO.File.Delete(Evaluation.LastPath);
+        }
+
+        /// Opt-in: runs every evaluation scenario against real Llama and logs the measured reports.
+        [UnityTest, Explicit("needs Ollama running with the configured Llama model")]
+        public IEnumerator LiveLlama_EvaluationSuite()
+        {
+            AgentHub.Llm = new OllamaClient();
+            foreach (var sc in Evaluation.Scenarios)
+            {
+                structures.Restore(null);
+                MissionControl.Restore(null);
+                yield return null;
+                Assert.IsTrue(Evaluation.Run(sc.Id, l => { if (l.StartsWith("AgentWorld Evaluation")) Debug.Log("[eval]\n" + l); }, out var err), err);
+                yield return WaitMission(400f);
+                yield return null;
+                Debug.Log($"[eval] {sc.Id}: {Evaluation.LastReport.status} passed={Evaluation.LastReport.passed} json={Evaluation.LastPath}");
+            }
         }
 
         [UnityTest]

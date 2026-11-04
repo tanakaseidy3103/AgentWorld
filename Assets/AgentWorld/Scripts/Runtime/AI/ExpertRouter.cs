@@ -11,14 +11,18 @@ namespace AgentWorld
     /// Llama only picks an intent from a fixed list; Unity executes it (mission, scouting, or a factual status answer).
     public static class ExpertRouter
     {
-        public static readonly (string role, string name, string skills)[] Profiles =
+        static readonly (string role, string name, string focus)[] Specialists =
         {
             ("assistant", "Ada", "planning, coordination, task delegation, explaining the mission"),
             ("explorer", "Grace", "exploration, terrain inspection, counting free building land"),
-            ("builder", "Linus", "construction of houses and farms, building feasibility, placement"),
+            ("builder", "Linus", "construction, building feasibility, placement"),
         };
 
-        public static readonly string[] Intents = { "mission", "scout", "status", "explain", "unsupported" };
+        /// Skill profile per specialist: focus plus the skills actually registered for that agent.
+        public static IEnumerable<(string role, string name, string skills)> Profiles =>
+            Specialists.Select(t => (t.role, t.name, $"{t.focus}; skills: {string.Join(", ", AgentConfigs.SkillsFor(t.role))}"));
+
+        public static readonly string[] Intents = { "mission", "scout", "status", "capabilities", "explain", "unsupported" };
         public const string Supported = "construir casas e fazendas (mission ...), explorar/inspecionar locais (Grace), perguntar o que um agente está fazendo, explicar a missão atual";
 
         [Serializable]
@@ -83,10 +87,12 @@ namespace AgentWorld
             switch (r.intent)
             {
                 case "mission":
+                    if (!AgentConfigs.Has("builder", "build_house")) { output("[Unity] Linus não tem a skill build_house; a missão não pode ser executada."); break; }
                     output(MissionControl.Start(request, output, out var err) ? "[Unity] missão iniciada: Ada coordena, Grace explora, Linus constrói" : "[Unity] " + err);
                     break;
                 case "scout":
                     var grace = AgentHub.Find("explorer");
+                    if (!AgentConfigs.Has("explorer", "inspect")) { output("[Unity] Grace não tem a skill inspect configurada."); break; }
                     output(grace.Ai.Assign(request, output, out var gerr) ? "[Unity] tarefa enviada para Grace" : "[Unity] " + gerr);
                     break;
                 case "status":
@@ -95,6 +101,10 @@ namespace AgentWorld
                     break;
                 case "explain":
                     output(MissionSummary());
+                    break;
+                case "capabilities":
+                    var asked = AgentHub.Find(r.agent);
+                    output(asked == null ? string.Join("\n", AgentHub.Agents.Select(Capabilities)) : Capabilities(asked));
                     break;
                 default:
                     var msg = string.IsNullOrWhiteSpace(r.message) ? "A equipe não sabe fazer isso." : r.message;
@@ -110,6 +120,10 @@ namespace AgentWorld
 
         static string Team() => string.Join("\n", AgentHub.Agents.Select(Describe));
 
+        /// Answered from the skill registry, so it can never promise something unimplemented.
+        public static string Capabilities(NpcAgent n) =>
+            $"[Unity] {n.displayName} ({n.RoleTitle}) pode: " + string.Join("; ", AgentConfigs.SkillsFor(n.agentRole).Select(SkillRegistry.Get).Where(s => s != null).Select(s => $"{s.Id} - {s.Description}"));
+
         public static string MissionSummary()
         {
             var m = MissionControl.State;
@@ -123,7 +137,7 @@ namespace AgentWorld
         {
             "scout" => "explorer",
             "mission" => "builder",
-            "status" => AgentHub.Find(r.agent)?.agentRole ?? "",
+            "status" or "capabilities" => AgentHub.Find(r.agent)?.agentRole ?? "",
             _ => "assistant",
         };
 
@@ -136,9 +150,10 @@ Return ONLY JSON: {{""intent"":""<one of: mission, scout, status, explain, unsup
 - mission: the player wants houses, farms or a village built (Ada plans, Grace scouts, Linus builds).
 - scout: find/inspect/explore places or land, without building.
 - status: asks what an agent is doing (set agent to that agent).
+- capabilities: asks what an agent can do or build (set agent).
 - explain: asks about the current mission or what happened.
 - unsupported: anything the team cannot do.
-Examples: ""Build a small village near the lake"" -> mission. ""Find a safe place to build"" -> scout. ""Ask Grace to explore"" -> scout. ""What is Linus doing?"" -> status, agent linus. ""Explain the current mission"" -> explain. ""Build a bridge over the lake"" -> unsupported.";
+Examples: ""Build a small village near the lake"" -> mission. ""Find a safe place to build"" -> scout. ""Ask Grace to explore"" -> scout. ""What is Linus doing?"" -> status, agent linus. ""What can Linus build?"" -> capabilities, agent linus. ""Explain the current mission"" -> explain. ""Build a bridge over the lake"" -> unsupported.";
 
         static string Trunc(string s, int n) => s.Length > n ? s.Substring(0, n) : s;
     }

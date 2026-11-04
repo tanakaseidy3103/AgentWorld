@@ -113,7 +113,11 @@ namespace AgentWorld
 
             sb.Append("\n<b>Equipe</b>\n");
             foreach (var n in AgentHub.Agents)
+            {
                 sb.Append($"<b>{n.displayName}</b> <color=#9ab>{n.RoleTitle}</color>  <color={ActivityColor(n.Activity)}>{n.Activity}</color> <size={small}>{Esc(n.Ai.Detail)}</size>\n");
+                sb.Append($"<size={small}><color=#7a8a99>   skills: {string.Join(", ", AgentConfigs.SkillsFor(n.agentRole))}</color></size>\n");
+            }
+            if (AgentConfigs.Errors.Count > 0) sb.Append($"<size={small}><color=#ff7a7a>agents.json: {AgentConfigs.Errors.Count} erro(s) - digite skills no terminal</color></size>\n");
 
             if (m.conversation.Count > 0)
             {

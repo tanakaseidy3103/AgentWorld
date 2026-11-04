@@ -31,6 +31,8 @@ agentes IA (Llama local via Ollama):
   mission <objetivo>         missão multi-agente: Ada delega, Grace explora, Linus constrói
                              ex: mission build a small village near the lake
   mission status | mission stop
+  skills                     skills registradas e quem pode usar (StreamingAssets/agents.json)
+  eval list | eval run <cenário> | eval report   avaliação com métricas medidas
 [Tab] mostra/esconde o painel Mission Control   [M] barra de missão
 frases livres (3+ palavras) vão para a Ada, que escolhe o especialista:
   ex: Find a safe place to build | What is Linus doing? | Explain the current mission
@@ -55,6 +57,8 @@ frases livres (3+ palavras) vão para a Ada, que escolhe o especialista:
                 case "agent": return Agent(arg, host);
                 case "world": return World(arg);
                 case "mission": return Mission(arg, host);
+                case "skills": return Skills();
+                case "eval": return Eval(arg, host);
                 case "ai": return arg == "status" ? AiStatus(host) : "uso: ai status";
                 default:
                     // Free-form sentences go to Ada's specialist routing; short unknown words keep the old error.
@@ -146,6 +150,33 @@ frases livres (3+ palavras) vão para a Ada, que escolhe o especialista:
                            (m.sharedMemory.Count == 0 ? "" : "\nmemória compartilhada:\n" + string.Join("\n", m.sharedMemory.Select(r => $"  {r.location}: {r.freeSites} terrenos livres ({r.reportedBy})")));
                 default:
                     return MissionControl.Start(arg, Print(host), out var error) ? $"[Unity] missão iniciada: {arg}" : "erro: " + error;
+            }
+        }
+
+        static string Skills()
+        {
+            var lines = SkillRegistry.All.Select(s => $"{s.Id,-16} {s.Description}  [params: {string.Join(", ", s.Parameters)}]");
+            var agents = AgentHub.Agents.Select(n => $"{n.displayName} ({n.RoleTitle}): {string.Join(", ", AgentConfigs.SkillsFor(n.agentRole))}");
+            var errors = AgentConfigs.Errors.Count == 0 ? "" : "\nerros de configuração:\n  " + string.Join("\n  ", AgentConfigs.Errors);
+            return "skills registradas:\n  " + string.Join("\n  ", lines) + $"\nagentes (fonte: {AgentConfigs.Source}):\n  " + string.Join("\n  ", agents) + errors;
+        }
+
+        static string Eval(string arg, Computer host)
+        {
+            var parts = arg.Split(new[] { ' ' }, 2);
+            switch (parts[0].ToLowerInvariant())
+            {
+                case "list": return string.Join("\n", Evaluation.Scenarios.Select(s => $"{s.Id,-12} espera {string.Join("|", s.Expected)}: \"{s.Objective}\" - {s.Description}"));
+                case "run":
+                    var id = parts.Length > 1 ? parts[1] : "";
+                    return Evaluation.Run(id, Print(host), out var err) ? $"[Unity] avaliação '{id}' iniciada; o relatório aparece ao final" : "erro: " + err;
+                case "report":
+                    if (MissionControl.State.status == "None") return "nenhuma missão para avaliar";
+                    if (MissionControl.Running) return "missão ainda em andamento";
+                    var r = Evaluation.Build(MissionControl.State);
+                    var path = Evaluation.Export(r);
+                    return Evaluation.Format(r) + (path != null ? "\nJSON: " + path : "");
+                default: return "uso: eval list | eval run <cenário> | eval report";
             }
         }
 
