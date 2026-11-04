@@ -69,7 +69,7 @@ namespace AgentWorld.Tests
             s.agents.Add(new AgentState { id = "linus", role = "builder", status = "Completed", goal = "casa", memory = { "Built house_built_1" } });
             SaveSystem.Save(s, path);
             var loaded = SaveSystem.Load(path);
-            Assert.AreEqual(2, loaded.version);
+            Assert.AreEqual(3, loaded.version);
             Assert.AreEqual(new Vector2(-5, -3), loaded.structures[0].position);
             Assert.AreEqual("Built house_built_1", loaded.agents[0].memory[0]);
             File.Delete(path);
@@ -98,6 +98,19 @@ namespace AgentWorld.Tests
             Assert.AreEqual(LocalShellBackend.Clear, shell.Execute("clear", null));
             StringAssert.StartsWith("uso:", shell.Execute("world", null));
             StringAssert.StartsWith("agente desconhecido", shell.Execute("agent dragon voar", null));
+        }
+
+        [Test]
+        public void BuildSites_AvoidRoadsLabAndBounds()
+        {
+            var go = new GameObject("sb");
+            var sb = go.AddComponent<StructureBuilder>();
+            Assert.IsFalse(sb.IsFree(new Vector2(5, -2.5f)), "on the main road");
+            Assert.IsFalse(sb.IsFree(new Vector2(0.5f, -8)), "on the south road");
+            Assert.IsFalse(sb.IsFree(new Vector2(0, 6)), "inside the lab");
+            Assert.IsFalse(sb.IsFree(new Vector2(30, 0)), "outside the map");
+            Assert.IsTrue(sb.IsFree(new Vector2(14, -8)), "open east field");
+            Object.DestroyImmediate(go);
         }
 
         [Test]

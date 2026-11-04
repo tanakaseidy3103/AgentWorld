@@ -17,6 +17,8 @@ namespace AgentWorld
         /// Playable area for new buildings (feet position) and the lab interior to keep clear.
         public Rect buildArea = new Rect(-18, -13, 36, 25);
         public Rect keepClear = new Rect(-7.5f, 2.5f, 15, 11);
+        /// Village roads (WorldBuilder's Path_H / Path_V, padded) never get built on.
+        public Rect[] roads = { new Rect(-20, -3.4f, 40, 2.8f), new Rect(-1.4f, -15, 2.8f, 18.5f) };
         public float buildSeconds = 4f;
 
         static readonly Vector2 Footprint = new Vector2(2.8f, 1.4f), FootOffset = new Vector2(0, 0.7f);
@@ -29,7 +31,8 @@ namespace AgentWorld
 
         public bool IsFree(Vector2 feet, float margin = Margin)
         {
-            if (!buildArea.Contains(feet) || keepClear.Overlaps(new Rect(feet.x - 1.4f, feet.y, 2.8f, 1.4f))) return false;
+            var foot = new Rect(feet.x - 1.4f, feet.y, 2.8f, 1.4f);
+            if (!buildArea.Contains(feet) || keepClear.Overlaps(foot) || roads.Any(r => r.Overlaps(foot))) return false;
             return Physics2D.OverlapBox(feet + FootOffset, Footprint + Vector2.one * margin, 0f) == null;
         }
 
@@ -45,6 +48,21 @@ namespace AgentWorld
                 if (IsFree(p)) return p;
             }
             return null;
+        }
+
+        /// How many houses still fit near a place (same ring search as FindSite, sites kept apart). Deterministic.
+        public int CountSites(Vector2 near, int max = 5)
+        {
+            var found = new List<Vector2>();
+            for (var r = 2.5f; r <= 9f && found.Count < max; r += 1f)
+            for (var i = 0; i < 16 && found.Count < max; i++)
+            {
+                var ang = i * Mathf.PI / 8f;
+                var p = near + new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * r;
+                p = new Vector2(Mathf.Round(p.x * 2) / 2, Mathf.Round(p.y * 2) / 2);
+                if (IsFree(p) && found.All(f => Mathf.Abs(f.x - p.x) > Footprint.x + Margin || Mathf.Abs(f.y - p.y) > Footprint.y + Margin)) found.Add(p);
+            }
+            return found.Count;
         }
 
         /// Visible construction: the house rises semi-transparent, then becomes solid.

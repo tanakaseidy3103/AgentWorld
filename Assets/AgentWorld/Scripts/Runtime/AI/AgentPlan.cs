@@ -95,7 +95,7 @@ namespace AgentWorld
 
         static string Loc(string s)
         {
-            s = (s ?? "").Trim().ToLowerInvariant().Replace(' ', '_');
+            s = (s ?? "").Trim().Trim('<', '>', '"', '\'', ' ').ToLowerInvariant().Replace(' ', '_');
             return s.StartsWith("near_") ? s.Substring(5) : s;
         }
     }
