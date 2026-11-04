@@ -1,88 +1,125 @@
-# Submission materials — AgentWorld
+# Submission kit — AgentWorld
+
+Deadline: **Nov 5 2026, 11:00 JST** (Nov 4, 9 PM ET). Nothing here has been uploaded or submitted.
 
 ## Title and tagline
 
-**AgentWorld: Llama Agents That Build Together**
-*A living pixel world where three local Meta Llama agents plan, delegate, explore and build, safely and offline.*
+**AgentWorld — Build, Test & Share AI Agents**
+*An open-source visual laboratory for building, testing, and understanding collaborative AI agents powered by Meta Llama.*
 
-## Short description (≈100 words)
+## Description (≈120 words)
 
-AgentWorld is a Unity 2D world inhabited by three AI agents powered by Meta Llama 3.2 running locally
-through Ollama. Give the team a mission in plain language, like "Build a small village near the lake".
-Ada, the coordinator, uses Llama to decompose it. Grace explores the map and writes measured findings
-to shared memory. Ada uses Llama again to choose building sites, and Linus constructs the houses in
-front of you. Every model decision is structured JSON that Unity validates against the real world state
-before executing it, with retries, recovery, cancellation and honest failure reporting. Everything runs
-offline: no API keys, no cloud, no per-token cost.
+AgentWorld is a Unity 6 pixel-art world where three AI agents, powered by Meta Llama 3.2 running locally
+through Ollama, collaborate on missions given in plain language. Ada, the coordinator, uses Llama to judge
+feasibility and delegate. Grace scouts the map, and Unity measures the free land she reports to shared memory.
+Grace and Linus discuss the plan in Llama-generated dialogue grounded in those measurements, then Ada picks
+building sites and Linus builds them in front of you. Every model decision is JSON validated against a skill
+registry, each agent's configured skills and the live world before Unity executes it. Developers can
+configure agents in `agents.json`, register new skills in C#, and evaluate missions with measured metrics.
+It runs offline, with no API keys.
 
 ## Problem and relevance
 
-LLM agents are moving from chat into environments: games, robots, software tools. There, a
-hallucinated location or an unsafe command has real consequences. Teams need patterns for letting a
-model *decide* while a trusted system *acts*, for coordinating several agents through shared state,
-and for showing users what the AI decided. AgentWorld demonstrates all three in a form anyone can watch:
-the model proposes, the engine validates and executes, and a live panel shows which is which. Because it
-runs on open weights locally, it costs nothing to run, keeps data private, and works offline, which suits
-classrooms, indie game studios and privacy-sensitive settings.
+LLM agents are moving into games, tools and robots, where a hallucinated location or an unsafe command has
+consequences, and where multi-agent behavior is hard to see and to evaluate. Teams need three things:
+- a pattern where the model decides and a trusted system acts;
+- a way to observe agents coordinating;
+- reproducible evaluation.
 
-## Technical architecture (for the form)
+AgentWorld packages all three in a form anyone can watch and extend. Because it runs on open weights locally,
+it costs nothing per run, keeps data private and works offline. That makes it useful for classrooms, game
+studios prototyping NPC autonomy, and researchers testing agent designs.
 
-- **Model:** Meta Llama 3.2 3B Instruct (open weights) served by Ollama on localhost; Unity calls
-  `/api/chat` asynchronously (UnityWebRequest + Awaitable) with JSON mode.
-- **Agents:** each NPC has a `LlamaAgentBrain` (state machine, bounded memory, timeout, cancellation).
-- **Mission pipeline:** Ada → Llama delegation JSON → Grace inspects; Unity computes free land and writes
-  `SiteReport`s to shared memory → Ada → Llama site-selection JSON → Linus builds.
-- **Safety:** whitelisted actions (`move_to`, `build`, `inspect`, `speak`, `wait`), only real location
-  ids, capacity checks, max actions/houses/retries. Model output is never executed as code.
-- **World:** collision-free placement (no overlap, roads and lab kept clear), animated construction,
-  versioned JSON save (v3) that persists houses, memory and mission.
-- **Quality:** 39 automated tests with a deterministic mock LLM, plus opt-in live-Llama tests.
+## Technical summary
 
-## Features that actually work (verified)
+- Meta Llama 3.2 3B (open weights) via Ollama on localhost; async `UnityWebRequest`, JSON mode, timeouts, cancellation.
+- `SkillRegistry`: every action is a registered skill (id, roles, parameters, validator, executor, safety notes).
+- `agents.json`: per-agent skills, title and personality, validated at startup.
+- `MissionControl`: Llama delegation → Unity-measured scouting → Llama dialogue → Llama site selection
+  (validated against capacity) → construction with recovery → honest outcome.
+- `ExpertRouter`: Llama routes free-form requests to a specialist; status and capability answers come from
+  live state and the registry.
+- `Evaluation`: scenarios, measured metrics, JSON reports. 27 EditMode + 33 PlayMode tests with a mock LLM,
+  plus opt-in live-Llama tests.
 
-See README → "What works (verified)". Do not claim anything beyond that list.
+## Verified features (only claim these)
+
+See README → "Measured results" and "Tests". Verified with real Llama on Nov 4:
+- village mission: Succeeded;
+- farm mission: Succeeded;
+- castle request: Unsupported (honest refusal);
+- single-agent house: Passed;
+- specialist routing: 5/5 requests ("What can Linus build?", "What is Grace doing?", "Find a safe place to build", "Explain the current mission", "Build a bridge" → refused);
+- grounded dialogue: Grace cited the measured site counts.
+
+Verified on a fresh clone: generation, all tests, Windows build. The `.exe` started without exceptions
+(20-second smoke run; the picture was not checked).
 
 ## 3-minute video script
 
-Preparation (before recording):
-1. `ollama list` shows `llama3.2`. Run `ollama run llama3.2 "hi"` once so the model is warm in memory.
-2. Delete the old save so the world starts clean:
-   `del "%USERPROFILE%\AppData\LocalLow\DefaultCompany\AgentWorld\world.json"`
-3. Unity: **AgentWorld → Rebuild World**, open `Main.unity`, set the Game view to **1920x1080**, press Play.
+**Preparation**
+1. `ollama list` shows `llama3.2`. Warm it up: `ollama run llama3.2 "hi"`.
+2. Delete the old save: `del "%USERPROFILE%\AppData\LocalLow\DefaultCompany\AgentWorld\world.json"`.
+3. In Unity run **AgentWorld → Rebuild World**, open `Main.unity`, set the Game view to **1920x1080**, press Play.
+   Check that Mission Control says *conectado · llama3.2*.
 
-| Time | Screen | Say |
+| Time | Screen | Narration |
 |---|---|---|
-| 0:00–0:20 | Title card, then the game running | "AI agents usually live in chat boxes. AgentWorld gives them a world, a body and teammates, all powered by Meta Llama 3.2 running locally." |
-| 0:20–0:40 | Walk with WASD past the lake and houses; Mission Control on the right shows *Meta Llama (Ollama): conectado · llama3.2* | "Three agents live here: Ada coordinates, Grace explores, Linus builds. Everything runs offline through Ollama." |
-| 0:40–0:55 | Press **M**, type `Build a small village with a farm near the lake`, Enter, then **Esc** | "I give the team one mission in plain language." |
-| 0:55–1:15 | Panel: Ada *Thinking*, then the **Decisões do Llama** line with the explore list and message | "Ada asks Llama to break it down: which places Grace should scout, and how many houses." |
-| 1:15–1:45 | Grace (magnifier icon) walking to each place, planting flags labelled "N livres"; *Memória compartilhada* fills with free-site counts | "Grace inspects each place. Unity measures the real free land and Grace writes it to shared memory. These are facts, not guesses." |
-| 1:45–2:25 | Second Llama decision (houses + farm sites, reason); Linus (hammer icon) walks over; scaffold and dust, the house rises, then the farm; tasks get ✔ | "Ada reads the shared memory and Llama picks the sites. Unity checks every choice: the place must exist, must have been explored and must have room. Then Linus builds." |
-| 2:25–2:40 | Press **M**, type `Build a giant stone castle on top of the lake`. Ada refuses with Llama's explanation; status *Unsupported* | "And when we ask for something the team can't do, Ada says so instead of pretending. Every model decision is validated before anything moves." |
-| 2:40–2:50 | Press F5; stop and restart Play (or F9); the village is still there | "The world, the agents' memory and the mission persist." |
-| 2:50–3:00 | Wide shot of the village | "Local open-weight Llama agents that collaborate safely. This is AgentWorld." |
+| 0:00–0:20 | Title card → the world | "AI agents are hard to observe and hard to trust. AgentWorld is an open-source lab where you can watch them collaborate and test them." |
+| 0:20–0:40 | Pan over the village; Mission Control shows *Meta Llama (Ollama): conectado · llama3.2* | "Everything runs on Meta Llama 3.2, locally through Ollama: no cloud, no keys." |
+| 0:40–1:00 | Walk past Ada, Grace, Linus (name plates, gear); in a lab terminal type `skills` | "Ada coordinates, Grace explores, Linus builds. Each one has skills from a registry, configured in a JSON file." |
+| 1:00–1:30 | Press **M**: `What can Linus build?` (answer from the registry), then **M**: `Build a small village with a farm near the lake`, Esc | "Ada uses Llama to route requests to the right specialist, then plans the mission." |
+| 1:30–2:00 | Grace walks and plants flags ("N livres"); bubbles: Grace reports numbers, Linus gives advice; *Conversa entre agentes* | "Grace measures real free land. The agents discuss it, and that dialogue is generated by Llama from the measured numbers." |
+| 2:00–2:30 | Ada's site decision; Linus builds (scaffold, dust, hammer); *Validação do Unity*; then terminal `eval report` | "Llama decides; Unity validates every choice against the world before anything moves. Each mission gets a measured report." |
+| 2:30–2:50 | Show `Assets/StreamingAssets/agents.json` and `docs/DEVELOPER_GUIDE.md`; then **M**: `Build a giant stone castle on top of the lake` → *Unsupported* | "Developers can change skills in one file. And when we ask for something the team can't do, it says so instead of pretending." |
+| 2:50–3:00 | Wide shot of the finished village | "AgentWorld: build, test and share AI agents, powered by open Meta Llama." |
 
-Backup if the live run misbehaves: run `mission stop`, then
-`agent builder build a house near the lake` (single-agent, verified 3/3), or re-record. Never edit the
-video to fake a result.
+**Backup plan if the live model misbehaves**
+1. `mission stop`, wait a few seconds, then run the mission again. Missions take ~20–60 s.
+2. If Ollama is down: restart it (`ollama serve` or the tray app), then run `ai status`.
+3. Fallback demo: `agent builder build a house near the lake` (single agent, verified).
+4. Last resort: use the recorded take from a previous successful run. Never edit a video to fake a result.
 
-## Demo recording checklist
+## Recording checklist
 
-- [ ] Ollama running, `llama3.2` warm, Wi-Fi not needed
-- [ ] Old `world.json` deleted; Rebuild World done; Game view 1920x1080, not maximized-blurry
-- [ ] Mission Control shows "conectado · llama3.2" before you start
-- [ ] OBS / Xbox Game Bar (Win+Alt+R) records the editor at 1080p with microphone
-- [ ] One full dry run done (missions take ~60 s; check the timing)
-- [ ] Video ≤ 3:00, model name and "runs locally" mentioned, no unverified claims
-- [ ] Upload to YouTube/Vimeo as **Public** or **Unlisted**; test the link in a private window
+- [ ] Ollama running, model warm, Mission Control shows "conectado"
+- [ ] Old `world.json` deleted; Rebuild World done; Game view 1920x1080
+- [ ] One full dry run (timings: village ~20 s, farm ~30 s on the test laptop)
+- [ ] Recorder (OBS or Win+Alt+R) at 1080p with microphone
+- [ ] Video ≤ 3:00; it says "Meta Llama 3.2, local via Ollama"; no claims beyond the verified list
+- [ ] Uploaded as Public or Unlisted; link tested in a private browser window
 
-## Final submission checklist
+## GitHub publication checklist (do this yourself; nothing was pushed)
 
-- [ ] Repository URL: https://github.com/tanakaseidy3103/AgentWorld (owner must push the branches and make it **public**)
-- [ ] Default branch or README points judges to the final code (merge `feature/final-sprint` into `main`, or say which branch)
-- [ ] Demo video URL: ______________________ (public, opens without login)
-- [ ] README has setup, model, architecture, Meta AI usage, limitations (done in repo)
-- [ ] No secrets: verified with `git grep`; `.gitignore` excludes Library/, Builds/, logs
-- [ ] Model disclosed: **Meta Llama 3.2 3B via Ollama, local**; no Muse Glimmer/Spark bonus claimed
-- [ ] Form fields filled from this file (title, tagline, description, problem, architecture)
-- [ ] Submitted before **Nov 5 2026, 11:00 JST (Nov 4, 9 PM ET)**. Aim for a buffer of 2+ hours.
+- [ ] Choose a license (for example MIT) and add `LICENSE`. **Currently there is none.** Without one, others
+      can't legally reuse the code, which conflicts with "open source".
+- [ ] Review the final branch, then publish:
+  ```
+  git checkout feature/judging-final
+  git push -u origin feature/judging-final
+  git push origin feature/unity-agentworld feature/mvp2-llama-agents feature/final-sprint feature/demo-polish   # optional history
+  ```
+  Then on GitHub open a PR `feature/judging-final → main` and merge it, so `main` shows the final README.
+  Checked Nov 4: GitHub currently has only `feature/unity-agentworld` (no `main`). The simplest option is
+  `git push origin feature/judging-final:main`, which creates `main` from the final branch; then set `main` as the default branch.
+- [ ] Repository visibility: **Public** (Settings → General → Danger Zone → Change visibility)
+- [ ] Open the repo in a private window: README renders, screenshots load
+- [ ] No secrets: `git grep -nIiE "api[_-]?key|secret|password|token"` shows only Unity's empty defaults
+- [ ] `.gitignore` excludes `Library/`, `Temp/`, `Logs/`, `Builds/`, generated `Assets/AgentWorld/{Art,Prefabs,Scenes}`
+
+## GitHub Release checklist (optional, recommended)
+
+- [ ] Use the tested ZIP `Builds/AgentWorld-Windows-x64.zip` (31 MB, 134 files, built from a fresh clone), or rebuild
+      with **AgentWorld → Build Windows** and zip the *whole* `Builds/Windows` folder
+- [ ] GitHub → Releases → *Draft a new release* → tag `v1.0-hackathon` → attach the ZIP
+- [ ] Release notes: requires Ollama + `ollama pull llama3.2`; unzip and run `AgentWorld.exe`; edit
+      `AgentWorld_Data/StreamingAssets/agents.json` to change skills
+
+## Submission form checklist
+
+- [ ] Title, tagline, description, problem statement (from this file)
+- [ ] Repository URL: https://github.com/tanakaseidy3103/AgentWorld (public, final branch merged)
+- [ ] Demo video URL: ______________________
+- [ ] Meta model disclosed: Llama 3.2 3B via Ollama, local; no Muse bonus claimed
+- [ ] Built-during-hackathon statement matches the git history (first commit Nov 3 2026; confirm that date is inside the official period)
+- [ ] Submitted before 11:00 JST, Nov 5 (aim for 2+ hours of buffer)

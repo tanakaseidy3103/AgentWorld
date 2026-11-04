@@ -327,6 +327,34 @@ namespace AgentWorld.Tests
             System.IO.File.Delete(Evaluation.LastPath);
         }
 
+        /// Opt-in: how real Llama routes typical requests (logged; counts how many match the expected intent).
+        [UnityTest, Explicit("needs Ollama running with the configured Llama model")]
+        public IEnumerator LiveLlama_Routing()
+        {
+            AgentHub.Llm = new OllamaClient();
+            var cases = new[]
+            {
+                ("What can Linus build?", "capabilities"), ("What is Grace doing?", "status"),
+                ("Find a safe place to build", "scout"), ("Explain the current mission", "explain"),
+                ("Build a bridge over the lake", "unsupported"),
+            };
+            var hits = 0;
+            foreach (var (text, expected) in cases)
+            {
+                var output = new System.Collections.Generic.List<string>();
+                ExpertRouter.Ask(text, output.Add, out _);
+                while (ExpertRouter.Busy) yield return null;
+                var got = output.FirstOrDefault(l => l.StartsWith("[Llama/Ada] especialista: ")) ?? "(no route)";
+                var ok = got.StartsWith($"[Llama/Ada] especialista: {expected}");
+                if (ok) hits++;
+                Debug.Log($"[route] {(ok ? "OK  " : "MISS")} \"{text}\" expected {expected} -> {got} || {string.Join(" | ", output.Skip(1))}");
+                MissionControl.Stop();
+                foreach (var a in AgentHub.Agents) a.Ai.Stop();
+                yield return new WaitForSeconds(2.5f);
+            }
+            Debug.Log($"[route] {hits}/{cases.Length} routed as expected");
+        }
+
         /// Opt-in: runs every evaluation scenario against real Llama and logs the measured reports.
         [UnityTest, Explicit("needs Ollama running with the configured Llama model")]
         public IEnumerator LiveLlama_EvaluationSuite()

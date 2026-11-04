@@ -55,3 +55,19 @@ Fallback: `feature/final-sprint` (commit `e99cac5`).
 - [x] Tests: EditMode 19/19, PlayMode 25/25 (copy of the project, editor was open); Windows build succeeded again
 - [x] Live: village mission 3/3 Succeeded (houses only), farm mission 1/1 Succeeded (1 house + 1 farm)
 - [ ] Manual: in the open editor, run **AgentWorld → Rebuild World** so the new art and farm prefab exist (old scene has no farm prefab; farm builds fail there with "estrutura indisponível")
+
+## Platform sprint (branch `feature/judging-final`, Nov 4 ~17:00-17:40 JST)
+
+Fallback: `feature/demo-polish` (`c558fbf`).
+
+- [x] Readable name plates "Ada — Coordinator" with real activity (Planning/Exploring/Talking/Building/Waiting/Idle); role gear
+- [x] Llama-generated agent dialogue grounded in measured data, feeding Ada's decision; failures logged, never faked
+- [x] Expert finder (Llama routing + registry-based answers); free sentences in terminal and M bar
+- [x] Skill registry with real executors; `agents.json` validated at startup; prompts/validator/router use it
+- [x] Evaluation: `eval list/run/report`, measured metrics, JSON export
+- [x] Knowledge reuse across missions (hint only; always re-measured)
+- [x] Fresh clone: world auto-generated in the editor; batch generation + EditMode 27/27 + PlayMode 33/33 + Windows build verified on a clean clone
+- [x] Release ZIP built from the clean clone (`Builds/AgentWorld-Windows-x64.zip`, 134 files); .exe smoke run (20 s, no exceptions)
+- [x] Live Llama: eval suite 3/3 PASS (village 18.0 s, farm 28.8 s, unsupported 1.9 s); routing 5/5; single-agent build passed
+- [ ] Not verified: 1080p on screen (only 4K screenshots); the editor's auto-generation on first open (tested in batch only); the .exe's picture
+- [ ] Owner decisions: LICENSE, push/merge, repository visibility, video, submission
