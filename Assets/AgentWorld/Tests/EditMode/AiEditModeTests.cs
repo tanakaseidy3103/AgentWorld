@@ -114,6 +114,25 @@ namespace AgentWorld.Tests
         }
 
         [Test]
+        public void ExpertRouter_ParsesOnlyKnownIntents()
+        {
+            var r = ExpertRouter.Parse("Sure: {\"intent\":\"Scout\",\"agent\":\"Grace\",\"reason\":\"find land\"}", out var err);
+            Assert.IsNull(err, err);
+            Assert.AreEqual("scout", r.intent);
+            Assert.AreEqual("grace", r.agent);
+            Assert.IsNull(ExpertRouter.Parse("{\"intent\":\"delete_world\"}", out err));
+            StringAssert.Contains("desconhecida", err);
+            Assert.IsNull(ExpertRouter.Parse("no json here", out _));
+        }
+
+        [Test]
+        public void Terminal_ShortUnknownCommand_StillErrors()
+        {
+            StringAssert.StartsWith("comando desconhecido", new LocalShellBackend().Execute("rm -rf", null));
+            StringAssert.Contains("Find a safe place", new LocalShellBackend().Execute("help", null));
+        }
+
+        [Test]
         public void TerminalFont_ScalesWithScreenHeight()
         {
             Assert.AreEqual(18, TerminalUI.FontSize(720));

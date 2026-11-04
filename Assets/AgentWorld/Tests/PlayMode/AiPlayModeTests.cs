@@ -16,13 +16,26 @@ namespace AgentWorld.Tests
     {
         public readonly Queue<string> Replies = new Queue<string>();
         public float Delay;
-        public int Calls;
+        /// JSON calls (plans/decisions). Free-text calls are counted in TextCalls when TextReply is set.
+        public int Calls, TextCalls;
+        /// When set, free-text calls (agent dialogue) return this instead of consuming Replies.
+        public string TextReply;
+        public bool FailText;
+        public readonly List<string> Prompts = new List<string>();
         public string Model => "mock-llama";
 
         public MockLlm(params string[] replies) { foreach (var r in replies) Replies.Enqueue(r); }
 
         public async Task<string> Chat(string system, string user, bool json, CancellationToken ct)
         {
+            Prompts.Add(user);
+            if (!json && (TextReply != null || FailText))
+            {
+                TextCalls++;
+                if (Delay > 0) await Awaitable.WaitForSecondsAsync(Delay, ct);
+                if (FailText) throw new System.Exception("mock text failure");
+                return TextReply;
+            }
             Calls++;
             if (Delay > 0) await Awaitable.WaitForSecondsAsync(Delay, ct);
             return Replies.Count > 1 ? Replies.Dequeue() : Replies.Peek();
