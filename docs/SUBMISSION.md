@@ -39,7 +39,7 @@ studios prototyping NPC autonomy, and researchers testing agent designs.
   (validated against capacity) → construction with recovery → honest outcome.
 - `ExpertRouter`: Llama routes free-form requests to a specialist; status and capability answers come from
   live state and the registry.
-- `Evaluation`: scenarios, measured metrics, JSON reports. 27 EditMode + 33 PlayMode tests with a mock LLM,
+- `Evaluation`: scenarios, measured metrics, JSON reports. 27 EditMode + 36 PlayMode tests with a mock LLM,
   plus opt-in live-Llama tests.
 
 ## Verified features (only claim these)

@@ -152,7 +152,7 @@ Unity.exe -batchmode -projectPath . -runTests -testPlatform EditMode -testResult
 Unity.exe -batchmode -projectPath . -runTests -testPlatform PlayMode -testResults TestResults-PlayMode.xml
 ```
 
-27 EditMode + 33 PlayMode tests pass on a fresh clone. They use a **deterministic mock LLM** (results are
+27 EditMode + 36 PlayMode tests pass. They use a **deterministic mock LLM** (results are
 labelled `mock-llama`, never reported as Llama). Coverage: skill registry, agent config validation,
 plan validation, unsafe actions, missions, dialogue (and dialogue failure), knowledge reuse, specialist
 routing, unsupported requests, farms, recovery, cancellation, timeouts, Ollama offline, save/load,
