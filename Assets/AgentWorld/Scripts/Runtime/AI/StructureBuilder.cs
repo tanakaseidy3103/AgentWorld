@@ -14,6 +14,8 @@ namespace AgentWorld
         public const int MaxStructures = 12;
 
         public GameObject housePrefab;
+        /// Fenced crop field: same footprint as a house, trigger collider so people can walk through it.
+        public GameObject farmPrefab;
         /// Playable area for new buildings (feet position) and the lab interior to keep clear.
         public Rect buildArea = new Rect(-18, -13, 36, 25);
         public Rect keepClear = new Rect(-7.5f, 2.5f, 15, 11);
@@ -65,14 +67,21 @@ namespace AgentWorld
             return found.Count;
         }
 
-        /// Visible construction: the house rises semi-transparent, then becomes solid.
+        public GameObject Prefab(string type) => type == "house" ? housePrefab : type == "farm" ? farmPrefab : null;
+
+        /// Visible construction: scaffolding and dust while the structure rises semi-transparent, then it becomes solid.
         public async Task<BuiltStructure> Construct(string type, Vector2 site, string builder, Action<float> progress, CancellationToken ct)
         {
-            if (type != "house" || housePrefab == null) throw new Exception("estrutura indisponível: " + type);
+            var prefab = Prefab(type) ?? throw new Exception("estrutura indisponível: " + type);
             if (Structures.Count() >= MaxStructures) throw new Exception($"limite de {MaxStructures} construções atingido");
 
-            var go = Instantiate(housePrefab, site, Quaternion.identity);
+            var go = Instantiate(prefab, site, Quaternion.identity);
             var id = NextId(type);
+            var scaffold = new GameObject("Scaffold").AddComponent<SpriteRenderer>();
+            scaffold.transform.position = site;
+            scaffold.sprite = RuntimeArt.Scaffold();
+            scaffold.sortingOrder = 30;
+            var nextPuff = 0f;
             go.name = "Built_" + id;
             var col = go.GetComponent<Collider2D>();
             var sr = go.GetComponent<SpriteRenderer>();
@@ -85,13 +94,15 @@ namespace AgentWorld
                     go.transform.localScale = new Vector3(1, Mathf.Lerp(0.15f, 1f, k), 1);
                     if (sr) sr.color = new Color(1, 1, 1, Mathf.Lerp(0.3f, 0.85f, k));
                     progress?.Invoke(k);
+                    if (t >= nextPuff) { FxPuff.Spawn(site + new Vector2(UnityEngine.Random.Range(-1.3f, 1.3f), UnityEngine.Random.Range(0f, 0.4f))); nextPuff = t + 0.2f; }
                     await Awaitable.NextFrameAsync(ct);
                 }
-                // Don't close the walls on someone standing in the footprint.
-                while (Physics2D.OverlapBoxAll(site + FootOffset, Footprint, 0f).Any(c => c.attachedRigidbody != null))
+                // Don't close the walls on someone standing in the footprint (farms are walkable).
+                while (col && !col.isTrigger && Physics2D.OverlapBoxAll(site + FootOffset, Footprint, 0f).Any(c => c.attachedRigidbody != null))
                     await Awaitable.WaitForSecondsAsync(0.25f, ct);
             }
             catch { Destroy(go); throw; }
+            finally { Destroy(scaffold.gameObject); }
 
             go.transform.localScale = Vector3.one;
             if (sr) sr.color = Color.white;
@@ -123,10 +134,10 @@ namespace AgentWorld
         public void Restore(List<StructureState> states)
         {
             foreach (var s in Structures) { s.gameObject.SetActive(false); Destroy(s.gameObject); }
-            if (states == null || housePrefab == null) return;
-            foreach (var s in states.Where(s => s.type == "house").Take(MaxStructures))
+            if (states == null) return;
+            foreach (var s in states.Where(s => Prefab(s.type) != null).Take(MaxStructures))
             {
-                var go = Instantiate(housePrefab, s.position, Quaternion.identity);
+                var go = Instantiate(Prefab(s.type), s.position, Quaternion.identity);
                 go.name = "Built_" + s.id;
                 Register(go, s.id, s.type, s.builtBy);
             }

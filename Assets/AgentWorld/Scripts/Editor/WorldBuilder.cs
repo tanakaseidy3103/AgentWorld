@@ -43,7 +43,8 @@ namespace AgentWorld.EditorTools
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
             // --- Sprites -------------------------------------------------------
-            var grass = MakeSprite("grass", Tex(16, 16, (x, y) => Noise(x, y, 1) > .85f ? C(70, 140, 60) : Noise(x, y, 2) > .93f ? C(130, 195, 95) : C(86, 160, 72)), Center);
+            var grass = MakeSprite("grass", Tex(16, 16, (x, y) =>
+                Noise(x, y, 1) > .86f ? C(70, 140, 60) : Noise(x, y, 2) > .93f ? C(130, 195, 95) : Noise(x, y, 4) > .9f ? C(98, 172, 80) : C(86, 160, 72)), Center);
             var path = MakeSprite("path", Tex(16, 16, (x, y) => Noise(x, y, 3) > .88f ? C(170, 140, 100) : C(200, 170, 122)), Center);
             var floor = MakeSprite("lab_floor", Tex(16, 16, (x, y) => x == 0 || y == 0 ? C(150, 160, 175) : C(205, 212, 222)), Center);
             var wall = MakeSprite("lab_wall", Tex(16, 16, (x, y) => y % 4 == 0 || (x + (y / 4 % 2) * 4) % 8 == 0 ? C(60, 64, 80) : C(95, 105, 130)), Center);
@@ -52,26 +53,53 @@ namespace AgentWorld.EditorTools
             {
                 ['k'] = C(40, 44, 52), ['g'] = C(30, 90, 60), ['l'] = C(120, 240, 150), ['w'] = C(150, 105, 60), ['d'] = C(105, 70, 40),
             }), Feet);
-            var lake = MakeSprite("lake", LakeTex(), Center);
+            var lakeFrames = new[] { MakeSprite("lake_0", LakeTex(0), Center), MakeSprite("lake_1", LakeTex(1), Center), MakeSprite("lake_2", LakeTex(2), Center) };
+            var shadow = MakeSprite("shadow", Tex(32, 10, (x, y) =>
+            {
+                float dx = (x - 15.5f) / 16f, dy = (y - 4.5f) / 5f;
+                return dx * dx + dy * dy <= 1f ? new Color32(20, 40, 20, 70) : Clear;
+            }), Center);
+            var pine = MakeSprite("tree_pine", PineTex(), Feet);
+            var decor = new[]
+            {
+                MakeSprite("flower_y", FlowerTex(C(255, 220, 80)), Feet), MakeSprite("flower_r", FlowerTex(C(240, 110, 120)), Feet),
+                MakeSprite("flower_w", FlowerTex(C(245, 245, 255)), Feet), MakeSprite("tuft", TuftTex(), Feet), MakeSprite("rock", RockTex(), Feet),
+            };
+            var farm = MakeSprite("farm", FarmTex(), Feet);
             var roofs = new[] { C(190, 70, 60), C(60, 110, 180), C(90, 150, 80) };
 
             // --- Prefabs -------------------------------------------------------
-            var playerPrefab = SavePrefab(MakeCharacter("Player", CharSprite("player", C(60, 110, 200), C(110, 70, 40)), true), "Player");
+            var go = MakeCharacter("Player", CharSprite("player", C(60, 110, 200), C(110, 70, 40)), true);
+            Shadow(go, shadow, 0.8f);
+            var playerPrefab = SavePrefab(go, "Player");
 
-            var go = Spr("Computer", computer, Vector2.zero, null, 0, null, true);
+            go = Spr("Computer", computer, Vector2.zero, null, 0, null, true);
             Box(go, new Vector2(1f, 0.5f), new Vector2(0, 0.25f));
             go.AddComponent<Computer>();
             var computerPrefab = SavePrefab(go, "Computer");
 
             go = Spr("Tree", tree, Vector2.zero, null, 0, null, true);
             Box(go, new Vector2(0.6f, 0.4f), new Vector2(0, 0.2f));
+            Shadow(go, shadow, 1.1f);
             var treePrefab = SavePrefab(go, "Tree");
+
+            go = Spr("Tree_Pine", pine, Vector2.zero, null, 0, null, true);
+            Box(go, new Vector2(0.5f, 0.4f), new Vector2(0, 0.2f));
+            Shadow(go, shadow, 0.9f);
+            var pinePrefab = SavePrefab(go, "Tree_Pine");
+
+            // Farm: walkable (trigger) so it never traps anyone, but still blocks other construction.
+            go = Spr("Farm", farm, Vector2.zero, null, -60, null, true);
+            Box(go, new Vector2(2.8f, 1.4f), new Vector2(0, 0.7f));
+            go.GetComponent<BoxCollider2D>().isTrigger = true;
+            var farmPrefab = SavePrefab(go, "Farm");
 
             var housePrefabs = new GameObject[roofs.Length];
             for (var i = 0; i < roofs.Length; i++)
             {
                 go = Spr("House", MakeSprite("house_" + i, HouseTex(roofs[i]), Feet), Vector2.zero, null, 0, null, true);
                 Box(go, new Vector2(2.8f, 1.4f), new Vector2(0, 0.7f));
+                Shadow(go, shadow, 3.4f);
                 housePrefabs[i] = SavePrefab(go, "House_" + i);
             }
 
@@ -80,6 +108,7 @@ namespace AgentWorld.EditorTools
             {
                 var n = Npcs[i];
                 go = MakeCharacter("Npc_" + n.name, CharSprite("npc_" + n.id, n.shirt, n.hair), false);
+                Shadow(go, shadow, 0.8f);
                 var agent = go.AddComponent<NpcAgent>();
                 agent.id = n.id; agent.displayName = n.name; agent.role = n.role; agent.agentRole = n.ai; agent.lines = n.lines;
                 npcPrefabs[i] = SavePrefab(go, "Npc_" + n.name);
@@ -117,7 +146,8 @@ namespace AgentWorld.EditorTools
             var houses = new[] { new Vector2(-13, 4), new Vector2(13, 4), new Vector2(-12, -10) };
             for (var i = 0; i < houses.Length; i++) Place(housePrefabs[i], houses[i], world).name = "House_" + (i + 1);
 
-            var lakeGo = Spr("Lake", lake, new Vector2(-6, -7), world, -85);
+            var lakeGo = Spr("Lake", lakeFrames[0], new Vector2(-6, -7), world, -85);
+            lakeGo.AddComponent<SpriteFlipbook>().frames = lakeFrames;
             Box(lakeGo, new Vector2(4.6f, 2.4f), Vector2.zero);
 
             // Named places for the LLM agents; plans may only reference these ids.
@@ -134,7 +164,21 @@ namespace AgentWorld.EditorTools
 
             foreach (var t in new[] { new Vector2(-17, 12), new Vector2(-10, 13), new Vector2(10, 13), new Vector2(17, 12), new Vector2(-18, -1),
                          new Vector2(18, -3), new Vector2(-5, -12), new Vector2(6, -10), new Vector2(15, -12), new Vector2(-17, -13), new Vector2(9, 8) })
-                Place(treePrefab, t, world);
+                Place(Noise((int)t.x, (int)t.y, 21) > .5f ? pinePrefab : treePrefab, t, world);
+
+            // Flowers, tufts and rocks: deterministic scatter that avoids roads, lab, lake and houses.
+            var deco = new GameObject("Decorations").transform;
+            deco.SetParent(world);
+            var avoid = new List<Rect> { new Rect(-20, -3.5f, 40, 3), new Rect(-1.5f, -15, 3, 19), new Rect(-7, 3, 14, 10), new Rect(-9, -9, 6, 4.5f) };
+            foreach (var h in houses) avoid.Add(new Rect(h.x - 2, h.y - 0.5f, 4, 3));
+            for (var gx = -19; gx <= 19; gx++)
+            for (var gy = -14; gy <= 14; gy++)
+            {
+                if (Noise(gx, gy, 31) < .82f) continue;
+                var p = new Vector2(gx + Noise(gx, gy, 32) - .5f, gy + Noise(gx, gy, 33) - .5f);
+                if (avoid.Exists(r => r.Contains(p))) continue;
+                Spr("Decor", decor[(int)(Noise(gx, gy, 34) * decor.Length) % decor.Length], p, deco, -95);
+            }
 
             for (var i = 0; i < Npcs.Length; i++) Place(npcPrefabs[i], Npcs[i].home, null);
 
@@ -152,7 +196,10 @@ namespace AgentWorld.EditorTools
             var systems = new GameObject("Systems");
             systems.AddComponent<WorldSaveManager>();
             systems.AddComponent<TerminalUI>();
-            systems.AddComponent<StructureBuilder>().housePrefab = housePrefabs[0];
+            var sb = systems.AddComponent<StructureBuilder>();
+            sb.housePrefab = housePrefabs[0];
+            sb.farmPrefab = farmPrefab;
+            systems.AddComponent<InspectionMarkers>();
             systems.AddComponent<MissionPanel>();
 
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -185,6 +232,13 @@ namespace AgentWorld.EditorTools
             col.offset = new Vector2(0, 0.3f);
             if (player) { go.AddComponent<PlayerController>(); go.AddComponent<Interactor>(); }
             return go;
+        }
+
+        static void Shadow(GameObject go, Sprite shadow, float width)
+        {
+            var s = Spr("Shadow", shadow, Vector2.zero, go.transform, -50);
+            s.transform.localPosition = new Vector3(0, 0.05f, 0);
+            s.transform.localScale = new Vector3(width / 2f, width / 2f * 0.8f, 1);
         }
 
         static void Mark(Transform parent, string id, string description, Vector2 pos, Vector2 approach)
@@ -352,13 +406,54 @@ namespace AgentWorld.EditorTools
             return Clear;
         });
 
-        static Texture2D LakeTex() => Tex(80, 44, (x, y) =>
+        // Lake frames differ only in where the ripples sit, so cycling them makes the water shimmer.
+        static Texture2D LakeTex(int frame) => Tex(80, 44, (x, y) =>
         {
             float dx = (x - 39.5f) / 40f, dy = (y - 21.5f) / 22f, d = dx * dx + dy * dy;
             if (d > 1f) return Clear;
-            if (d > 0.82f) return Noise(x, y, 11) > .5f ? C(200, 180, 120) : C(180, 160, 105); // sandy shore
-            if (Noise(x / 3, y, 12) > .92f) return C(170, 215, 245);                             // ripples
-            return d < 0.35f ? C(45, 100, 175) : C(65, 130, 200);
+            if (d > 0.9f) return Noise(x, y, 11) > .5f ? C(205, 185, 125) : C(185, 165, 108);   // sandy shore
+            if (d > 0.82f) return C(150, 200, 230);                                               // foam line
+            if ((x + 7 * y) % 41 == 0 && d < 0.6f) return C(70, 150, 80);                         // lily pads
+            if (Noise((x + frame * 3) / 3, y, 12) > .92f) return C(185, 225, 250);                // ripples
+            if (d < 0.25f) return C(35, 85, 160);
+            return d < 0.5f ? C(48, 105, 180) : C(65, 132, 202);
+        });
+
+        static Texture2D PineTex() => Tex(16, 26, (x, y) =>
+        {
+            if (x >= 7 && x <= 8 && y <= 6) return x == 7 ? C(80, 50, 30) : C(110, 72, 42);
+            var w = (26 - y) * 7 / 20 - (y % 6 == 5 ? 1 : 0);
+            if (y >= 5 && y <= 25 && Mathf.Abs(x - 7.5f) <= w)
+                return Mathf.Abs(x - 7.5f) > w - 1 ? C(25, 80, 45) : Noise(x, y, 9) > .85f ? C(70, 150, 80) : C(40, 110, 60);
+            return Clear;
+        });
+
+        static Texture2D FlowerTex(Color32 petal) => Tex(6, 6, (x, y) =>
+        {
+            if (x == 2 && y <= 2) return C(60, 130, 55);
+            if (y >= 3 && y <= 5 && x >= 1 && x <= 3 && !(x != 2 && y != 4)) return x == 2 && y == 4 ? C(250, 200, 60) : petal;
+            return Clear;
+        });
+
+        static Texture2D TuftTex() => Tex(6, 5, (x, y) => (x + y) % 2 == 0 && y <= 4 - Mathf.Abs(x - 2) / 2 ? C(60, 125, 50) : Clear);
+
+        static Texture2D RockTex() => Tex(6, 4, (x, y) =>
+        {
+            float dx = (x - 2.5f) / 3f, dy = (y - 1.2f) / 2f;
+            return dx * dx + dy * dy <= 1f ? (y >= 2 ? C(170, 170, 160) : C(125, 125, 120)) : Clear;
+        });
+
+        static Texture2D FarmTex() => Tex(48, 32, (x, y) =>
+        {
+            var fence = x <= 1 || x >= 46 || y <= 1 || y >= 30;
+            if (fence) return (x + y) % 6 < 2 ? C(150, 105, 60) : C(115, 78, 45);
+            var row = (y - 3) % 6;
+            if (row <= 2)
+            {
+                if (row == 1 && x % 5 == 2) return Noise(x, y, 41) > .7f ? C(235, 140, 40) : C(90, 180, 70); // pumpkins and sprouts
+                return C(120, 80, 50);
+            }
+            return C(150, 105, 65);
         });
 
         static Texture2D HouseTex(Color32 roof) => Tex(48, 40, (x, y) =>

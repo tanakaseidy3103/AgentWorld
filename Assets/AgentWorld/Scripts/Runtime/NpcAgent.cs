@@ -72,6 +72,7 @@ namespace AgentWorld
             rb.freezeRotation = true;
             Home = transform.position;
             Brain ??= string.IsNullOrEmpty(agentRole) ? new WanderBrain() : new LlamaAgentBrain(this);
+            if (Ai != null && !GetComponent<AgentIndicator>()) gameObject.AddComponent<AgentIndicator>();
         }
 
         void FixedUpdate()

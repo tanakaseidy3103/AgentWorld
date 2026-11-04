@@ -68,6 +68,9 @@ namespace AgentWorld
         public List<string> Memory { get; } = new List<string>();
         public List<string> ChatHistory { get; } = new List<string>();
         public bool Busy => cts != null;
+        /// Until this time the agent shows a "decision made" indicator (set when a Llama decision is accepted).
+        public float DecisionUntil { get; private set; }
+        public void MarkDecision() => DecisionUntil = Time.time + 3f;
         public string Role => npc.agentRole;
         string Name => npc.displayName;
 
@@ -222,7 +225,7 @@ You act ONLY by returning one JSON object with this schema:
 {{""agent"":""{Role}"",""goal"":""<short goal>"",""actions"":[<action>, ...]}}
 Allowed actions (nothing else exists):
 {{""type"":""move_to"",""target"":""<location id>""}}
-{{""type"":""build"",""structure"":""house"",""location"":""<location id>""}}   (builder only; builds a house next to that location)
+{{""type"":""build"",""structure"":""house"",""location"":""<location id>""}}   (builder only; structure is ""house"" or ""farm"" (fenced crop field); builds next to that location)
 {{""type"":""inspect"",""target"":""<location id>""}}   (look around a location and report)
 {{""type"":""speak"",""message"":""<one short sentence>""}}
 {{""type"":""wait"",""seconds"":2}}
