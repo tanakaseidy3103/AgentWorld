@@ -44,7 +44,7 @@ namespace AgentWorld
             {
                 var p = cam.WorldToScreenPoint(kv.Value.transform.position + Vector3.up * 1.25f);
                 if (p.z < 0) continue;
-                GUI.Label(new Rect(p.x - size * 3, Screen.height - p.y - size, size * 6, size * 1.4f), $"{freeSites[kv.Key]} livres", style);
+                GUI.Label(new Rect(p.x - size * 3, Screen.height - p.y - size, size * 6, size * 1.4f), $"{freeSites[kv.Key]} free", style);
             }
         }
     }

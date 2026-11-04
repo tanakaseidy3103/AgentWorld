@@ -18,25 +18,25 @@ namespace AgentWorld
         public const string Clear = "\u0000clear";
 
         const string Help =
-@"comandos: help, echo <texto>, whoami, agents, time, ide, clear
-agentes IA (Llama local via Ollama):
-  agent list                 agentes e estado
-  agent status               detalhes (objetivo, resultado, memória)
-  agent builder <tarefa>     ex: agent builder construa uma casa perto do lago
-  agent explorer <tarefa>    ex: agent explorer inspecione o lago
-  agent assistant <tarefa>   ex: agent assistant explique o laboratório
-  agent stop <id|papel>      cancela a tarefa
+@"commands: help, echo <text>, whoami, agents, time, ide, clear
+AI agents (local Llama via Ollama):
+  agent list                 agents and their state
+  agent status               details (goal, result, memory)
+  agent builder <task>       e.g. agent builder build a house near the lake
+  agent explorer <task>      e.g. agent explorer inspect the lake
+  agent assistant <task>     e.g. agent assistant explain the lab
+  agent stop <id|role>       cancel the task
   world status | world structures
-  ai status                  testa conexão com o Ollama
-  mission <objetivo>         missão multi-agente: Ada delega, Grace explora, Linus constrói
-                             ex: mission build a small village near the lake
+  ai status                  test the Ollama connection
+  mission <objective>        multi-agent mission: Ada delegates, Grace explores, Linus builds
+                             e.g. mission build a small village near the lake
   mission status | mission stop
-  skills                     skills registradas e quem pode usar (StreamingAssets/agents.json)
-  eval list | eval run <cenário> | eval report   avaliação com métricas medidas
-[Tab] mostra/esconde o painel Mission Control   [M] barra de missão
-frases livres (3+ palavras) vão para a Ada, que escolhe o especialista:
-  ex: Find a safe place to build | What is Linus doing? | Explain the current mission
-[Llama] = decisão do modelo   [Unity] = ação executada pelo jogo";
+  skills                     registered skills and who may use them (StreamingAssets/agents.json)
+  eval list | eval run <scenario> | eval report   evaluation with measured metrics
+[Tab] show/hide Mission Control   [M] mission bar
+free sentences (3+ words) go to Ada, who picks the specialist:
+  e.g. Find a safe place to build | What is Linus doing? | Explain the current mission
+[Llama] = model decision   [Unity] = action executed by the game";
 
         public string Execute(string input, Computer host)
         {
@@ -49,22 +49,22 @@ frases livres (3+ palavras) vão para a Ada, que escolhe o especialista:
                 case "whoami": return host != null ? host.id : "?";
                 case "time": return DateTime.Now.ToString("HH:mm:ss");
                 case "clear": return Clear;
-                case "ide": return "Living IDE (protótipo): use 'agent ...' para dar objetivos aos agentes Llama. Veja help.";
+                case "ide": return "Living IDE (prototype): use 'agent ...' to give goals to the Llama agents. See help.";
                 case "agents":
                     var npcs = UnityEngine.Object.FindObjectsByType<NpcAgent>(FindObjectsSortMode.None);
-                    return npcs.Length == 0 ? "nenhum agente"
+                    return npcs.Length == 0 ? "no agents"
                         : string.Join("\n", npcs.OrderBy(n => n.id).Select(n => $"{n.displayName} ({n.role}) @ {((Vector2)n.transform.position).ToString("F1")}"));
                 case "agent": return Agent(arg, host);
                 case "world": return World(arg);
                 case "mission": return Mission(arg, host);
                 case "skills": return Skills();
                 case "eval": return Eval(arg, host);
-                case "ai": return arg == "status" ? AiStatus(host) : "uso: ai status";
+                case "ai": return arg == "status" ? AiStatus(host) : "usage: ai status";
                 default:
                     // Free-form sentences go to Ada's specialist routing; short unknown words keep the old error.
                     if (input.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).Length >= 3)
-                        return ExpertRouter.Ask(input, Print(host), out var rerr) ? "[Ada] escolhendo o especialista certo (Llama)..." : "erro: " + rerr;
-                    return $"comando desconhecido: {parts[0]} (digite help)";
+                        return ExpertRouter.Ask(input, Print(host), out var rerr) ? "[Ada] choosing the right specialist (Llama)..." : "error: " + rerr;
+                    return $"unknown command: {parts[0]} (type help)";
             }
         }
 
@@ -77,23 +77,23 @@ frases livres (3+ palavras) vão para a Ada, que escolhe o especialista:
             switch (sub)
             {
                 case "list":
-                    return agents.Count == 0 ? "nenhum agente IA" : string.Join("\n", agents.Select(n => $"{n.id,-6} {n.agentRole,-9} {n.Ai.Status} {n.Ai.Detail}"));
+                    return agents.Count == 0 ? "no AI agents" : string.Join("\n", agents.Select(n => $"{n.id,-6} {n.agentRole,-9} {n.Ai.Status} {n.Ai.Detail}"));
                 case "status":
-                    return agents.Count == 0 ? "nenhum agente IA" : string.Join("\n", agents.Select(n =>
-                        $"{n.displayName} ({n.agentRole}) - {n.Ai.Status}\n  objetivo: {Or(n.Ai.Goal)}\n  resultado: {Or(n.Ai.LastResult)}\n  memória: {n.Ai.Memory.Count} itens"));
+                    return agents.Count == 0 ? "no AI agents" : string.Join("\n", agents.Select(n =>
+                        $"{n.displayName} ({n.agentRole}) - {n.Ai.Status}\n  goal: {Or(n.Ai.Goal)}\n  result: {Or(n.Ai.LastResult)}\n  memory: {n.Ai.Memory.Count} items"));
                 case "stop":
                     var target = AgentHub.Find(rest);
-                    if (target == null) return "agente não encontrado: " + rest;
-                    if (!target.Ai.Busy) return $"{target.displayName} não tem tarefa ativa";
+                    if (target == null) return "agent not found: " + rest;
+                    if (!target.Ai.Busy) return $"{target.displayName} has no active task";
                     target.Ai.Stop();
-                    return $"cancelando tarefa de {target.displayName}...";
+                    return $"cancelling {target.displayName}'s task...";
                 case "":
-                    return "uso: agent list | status | <papel> <tarefa> | stop <id>";
+                    return "usage: agent list | status | <role> <task> | stop <id>";
                 default:
                     var agent = AgentHub.Find(sub);
-                    if (agent == null) return $"agente desconhecido: {sub} (veja agent list)";
-                    if (rest == "") return $"uso: agent {sub} <tarefa>";
-                    return agent.Ai.Assign(rest, Print(host), out var error) ? $"[Unity] tarefa enviada para {agent.displayName}" : "erro: " + error;
+                    if (agent == null) return $"unknown agent: {sub} (see agent list)";
+                    if (rest == "") return $"usage: agent {sub} <task>";
+                    return agent.Ai.Assign(rest, Print(host), out var error) ? $"[Unity] task sent to {agent.displayName}" : "error: " + error;
             }
         }
 
@@ -104,19 +104,19 @@ frases livres (3+ palavras) vão para a Ada, que escolhe o especialista:
             switch (arg.ToLowerInvariant())
             {
                 case "status":
-                    return $"locais: {string.Join(", ", Landmark.All.Select(l => l.id).OrderBy(s => s))}\n" +
-                           $"construções de agentes: {built.Count}/{StructureBuilder.MaxStructures}\nagentes IA: {AgentHub.Agents.Count()}";
+                    return $"places: {string.Join(", ", Landmark.All.Select(l => l.id).OrderBy(s => s))}\n" +
+                           $"agent-built structures: {built.Count}/{StructureBuilder.MaxStructures}\nAI agents: {AgentHub.Agents.Count()}";
                 case "structures":
-                    return built.Count == 0 ? "nenhuma construção feita por agentes ainda"
-                        : string.Join("\n", built.Select(s => $"{s.id} por {s.builtBy} @ {((Vector2)s.transform.position).ToString("F1")}"));
-                default: return "uso: world status | world structures";
+                    return built.Count == 0 ? "no structures built by agents yet"
+                        : string.Join("\n", built.Select(s => $"{s.id} by {s.builtBy} @ {((Vector2)s.transform.position).ToString("F1")}"));
+                default: return "usage: world status | world structures";
             }
         }
 
         static string AiStatus(Computer host)
         {
             _ = Ping(Print(host));
-            return $"[Unity] verificando Ollama em {LlmConfig.Endpoint}...";
+            return $"[Unity] checking Ollama at {LlmConfig.Endpoint}...";
         }
 
         static async Task Ping(Action<string> output)
@@ -126,11 +126,11 @@ frases livres (3+ palavras) vão para a Ada, que escolhe o especialista:
             {
                 var models = await llm.ListModels(CancellationToken.None);
                 var installed = models.Any(m => m == llm.Model || m == llm.Model + ":latest");
-                output("Ollama: conectado");
-                output($"Modelo: {llm.Model} {(installed ? "(instalado)" : $"(NÃO instalado: rode 'ollama pull {llm.Model}')")}");
-                output($"Agentes: {AgentHub.Agents.Count()}");
+                output("Ollama: connected");
+                output($"Model: {llm.Model} {(installed ? "(installed)" : $"(NOT installed: run 'ollama pull {llm.Model}')")}");
+                output($"Agents: {AgentHub.Agents.Count()}");
             }
-            catch (Exception e) { output("Ollama: indisponível - " + e.Message); }
+            catch (Exception e) { output("Ollama: unavailable - " + e.Message); }
         }
 
         internal static string Mission(string arg, Computer host)
@@ -138,18 +138,18 @@ frases livres (3+ palavras) vão para a Ada, que escolhe o especialista:
             var m = MissionControl.State;
             switch (arg.ToLowerInvariant())
             {
-                case "": return "uso: mission <objetivo> | mission status | mission stop";
+                case "": return "usage: mission <objective> | mission status | mission stop";
                 case "stop":
-                    if (!MissionControl.Running) return "nenhuma missão em andamento";
+                    if (!MissionControl.Running) return "no mission running";
                     MissionControl.Stop();
-                    return "cancelando missão...";
+                    return "cancelling mission...";
                 case "status":
-                    if (m.status == "None") return "nenhuma missão ainda";
-                    return $"missão: {m.objective}\nestado: {m.status} {m.result}\ncasas: {m.housesBuilt}/{m.housesWanted}\n" +
+                    if (m.status == "None") return "no mission yet";
+                    return $"mission: {m.objective}\nstatus: {m.status} {m.result}\nhouses: {m.housesBuilt}/{m.housesWanted}\n" +
                            string.Join("\n", m.tasks.Select(t => $"  #{t.id} {t.agent}: {t.description} [{t.status}]")) +
-                           (m.sharedMemory.Count == 0 ? "" : "\nmemória compartilhada:\n" + string.Join("\n", m.sharedMemory.Select(r => $"  {r.location}: {r.freeSites} terrenos livres ({r.reportedBy})")));
+                           (m.sharedMemory.Count == 0 ? "" : "\nshared memory:\n" + string.Join("\n", m.sharedMemory.Select(r => $"  {r.location}: {r.freeSites} free sites ({r.reportedBy})")));
                 default:
-                    return MissionControl.Start(arg, Print(host), out var error) ? $"[Unity] missão iniciada: {arg}" : "erro: " + error;
+                    return MissionControl.Start(arg, Print(host), out var error) ? $"[Unity] mission started: {arg}" : "error: " + error;
             }
         }
 
@@ -157,8 +157,8 @@ frases livres (3+ palavras) vão para a Ada, que escolhe o especialista:
         {
             var lines = SkillRegistry.All.Select(s => $"{s.Id,-16} {s.Description}  [params: {string.Join(", ", s.Parameters)}]");
             var agents = AgentHub.Agents.Select(n => $"{n.displayName} ({n.RoleTitle}): {string.Join(", ", AgentConfigs.SkillsFor(n.agentRole))}");
-            var errors = AgentConfigs.Errors.Count == 0 ? "" : "\nerros de configuração:\n  " + string.Join("\n  ", AgentConfigs.Errors);
-            return "skills registradas:\n  " + string.Join("\n  ", lines) + $"\nagentes (fonte: {AgentConfigs.Source}):\n  " + string.Join("\n  ", agents) + errors;
+            var errors = AgentConfigs.Errors.Count == 0 ? "" : "\nconfiguration errors:\n  " + string.Join("\n  ", AgentConfigs.Errors);
+            return "registered skills:\n  " + string.Join("\n  ", lines) + $"\nagents (source: {AgentConfigs.Source}):\n  " + string.Join("\n  ", agents) + errors;
         }
 
         static string Eval(string arg, Computer host)
@@ -166,17 +166,17 @@ frases livres (3+ palavras) vão para a Ada, que escolhe o especialista:
             var parts = arg.Split(new[] { ' ' }, 2);
             switch (parts[0].ToLowerInvariant())
             {
-                case "list": return string.Join("\n", Evaluation.Scenarios.Select(s => $"{s.Id,-12} espera {string.Join("|", s.Expected)}: \"{s.Objective}\" - {s.Description}"));
+                case "list": return string.Join("\n", Evaluation.Scenarios.Select(s => $"{s.Id,-12} expects {string.Join("|", s.Expected)}: \"{s.Objective}\" - {s.Description}"));
                 case "run":
                     var id = parts.Length > 1 ? parts[1] : "";
-                    return Evaluation.Run(id, Print(host), out var err) ? $"[Unity] avaliação '{id}' iniciada; o relatório aparece ao final" : "erro: " + err;
+                    return Evaluation.Run(id, Print(host), out var err) ? $"[Unity] evaluation '{id}' started; the report appears at the end" : "error: " + err;
                 case "report":
-                    if (MissionControl.State.status == "None") return "nenhuma missão para avaliar";
-                    if (MissionControl.Running) return "missão ainda em andamento";
+                    if (MissionControl.State.status == "None") return "no mission to evaluate";
+                    if (MissionControl.Running) return "mission still running";
                     var r = Evaluation.Build(MissionControl.State);
                     var path = Evaluation.Export(r);
                     return Evaluation.Format(r) + (path != null ? "\nJSON: " + path : "");
-                default: return "uso: eval list | eval run <cenário> | eval report";
+                default: return "usage: eval list | eval run <scenario> | eval report";
             }
         }
 
@@ -193,7 +193,7 @@ frases livres (3+ palavras) vão para a Ada, que escolhe o especialista:
             {
                 "clear" => LocalShellBackend.Clear,
                 "status" or "stop" => LocalShellBackend.Mission(input, host),
-                _ => ExpertRouter.Ask(input, LocalShellBackend.Print(host), out var error) ? "[Ada] escolhendo o especialista certo (Llama)..." : "erro: " + error,
+                _ => ExpertRouter.Ask(input, LocalShellBackend.Print(host), out var error) ? "[Ada] choosing the right specialist (Llama)..." : "error: " + error,
             };
     }
 
@@ -206,7 +206,7 @@ frases livres (3+ palavras) vão para a Ada, que escolhe o especialista:
         public string Execute(string input, Computer host)
         {
             if (input.ToLowerInvariant() == "clear") return LocalShellBackend.Clear;
-            return npc.Ai.Chat(input, LocalShellBackend.Print(host), out var error) ? $"[{npc.displayName}] pensando..." : "erro: " + error;
+            return npc.Ai.Chat(input, LocalShellBackend.Print(host), out var error) ? $"[{npc.displayName}] thinking..." : "error: " + error;
         }
     }
 }

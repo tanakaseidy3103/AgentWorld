@@ -38,17 +38,17 @@ namespace AgentWorld
         public static AgentPlan Parse(string raw, out string error)
         {
             error = null;
-            if (string.IsNullOrWhiteSpace(raw)) { error = "resposta vazia do LLM"; return null; }
+            if (string.IsNullOrWhiteSpace(raw)) { error = "empty LLM response"; return null; }
             // Small models sometimes wrap JSON in prose or ``` fences.
             int a = raw.IndexOf('{'), b = raw.LastIndexOf('}');
-            if (a < 0 || b <= a) { error = "resposta do LLM não contém JSON"; return null; }
+            if (a < 0 || b <= a) { error = "LLM response contains no JSON"; return null; }
             try
             {
                 var plan = JsonUtility.FromJson<AgentPlan>(raw.Substring(a, b - a + 1));
-                if (plan?.actions == null || plan.actions.Count == 0) { error = "plano sem ações"; return null; }
+                if (plan?.actions == null || plan.actions.Count == 0) { error = "plan has no actions"; return null; }
                 return plan;
             }
-            catch (Exception e) { error = "JSON inválido: " + e.Message; return null; }
+            catch (Exception e) { error = "invalid JSON: " + e.Message; return null; }
         }
 
         /// Checks every action against the skill registry, the agent's configured skills and the live
@@ -56,12 +56,12 @@ namespace AgentWorld
         public static List<string> Validate(AgentPlan plan, ICollection<string> locations, string role)
         {
             var errors = new List<string>();
-            if (plan.actions.Count > MaxActions) errors.Add($"plano com {plan.actions.Count} ações (máx {MaxActions})");
+            if (plan.actions.Count > MaxActions) errors.Add($"plan has {plan.actions.Count} actions (max {MaxActions})");
             var allowed = AgentConfigs.SkillsFor(role);
             for (var i = 0; i < plan.actions.Count; i++)
             {
                 var act = plan.actions[i];
-                var at = $"ação {i + 1}";
+                var at = $"action {i + 1}";
                 if (act != null)
                 {
                     act.type = act.type?.Trim().ToLowerInvariant();
@@ -71,10 +71,10 @@ namespace AgentWorld
                 var skill = SkillRegistry.Get(id);
                 if (skill == null)
                 {
-                    errors.Add(act?.type == "build" ? $"{at}: estrutura inválida '{act.structure}'" : $"{at}: tipo desconhecido '{act?.type}'");
+                    errors.Add(act?.type == "build" ? $"{at}: invalid structure '{act.structure}'" : $"{at}: unknown action type '{act?.type}'");
                     continue;
                 }
-                if (!allowed.Contains(id)) errors.Add($"{at}: {role} não tem a skill '{id}'");
+                if (!allowed.Contains(id)) errors.Add($"{at}: {role} does not have skill '{id}'");
                 var problem = skill.Validate(act, locations);
                 if (problem != null) errors.Add($"{at}: {problem}");
             }

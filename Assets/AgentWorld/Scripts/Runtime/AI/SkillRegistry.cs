@@ -45,16 +45,16 @@ namespace AgentWorld
 
         public static void Register(Skill s)
         {
-            if (string.IsNullOrWhiteSpace(s?.Id)) throw new ArgumentException("skill sem Id");
-            if (s.Validate == null || s.Execute == null) throw new ArgumentException($"skill '{s.Id}' precisa de Validate e Execute");
-            if (skills.ContainsKey(s.Id)) throw new ArgumentException($"skill '{s.Id}' já registrada");
+            if (string.IsNullOrWhiteSpace(s?.Id)) throw new ArgumentException("skill has no Id");
+            if (s.Validate == null || s.Execute == null) throw new ArgumentException($"skill '{s.Id}' needs Validate and Execute");
+            if (skills.ContainsKey(s.Id)) throw new ArgumentException($"skill '{s.Id}' is already registered");
             skills[s.Id] = s;
         }
 
         static SkillRegistry() => RegisterBuiltIns();
 
         static string NeedLocation(string id, ICollection<string> locations, string field) =>
-            locations.Contains(id) ? null : $"local inválido '{id}' em {field}";
+            locations.Contains(id) ? null : $"invalid location '{id}' in {field}";
 
         static void RegisterBuiltIns()
         {
@@ -83,7 +83,7 @@ namespace AgentWorld
                 {
                     var target = Landmark.Find(c.Action.target);
                     await c.Brain.MoveTo(target.StandPoint, c.Action.target, ct);
-                    c.Brain.SetActivity(AgentStatus.Acting, "inspecionando");
+                    c.Brain.SetActivity(AgentStatus.Acting, "inspecting");
                     var report = LlamaAgentBrain.Describe(target);
                     c.Brain.Remember($"Inspected {c.Action.target}: {report}");
                     c.Say(report);
@@ -102,9 +102,9 @@ namespace AgentWorld
                 Validate = (a, locs) => NeedLocation(a.target = PlanValidator.Loc(a.target), locs, "target"),
                 Execute = (c, ct) =>
                 {
-                    var sb = StructureBuilder.Instance ?? throw new Exception("sistema de construção ausente");
+                    var sb = StructureBuilder.Instance ?? throw new Exception("construction system missing");
                     var free = sb.CountSites(Landmark.Find(c.Action.target).transform.position);
-                    var line = $"{c.Action.target}: {free} terrenos livres para construir";
+                    var line = $"{c.Action.target}: {free} free building sites";
                     c.Brain.Remember($"Measured {c.Action.target}: {free} free building sites");
                     c.Say(line);
                     c.Npc.Say(line);
@@ -112,7 +112,7 @@ namespace AgentWorld
                 },
             });
 
-            foreach (var (type, label) in new[] { ("house", "casa"), ("farm", "fazenda") })
+            foreach (var (type, label) in new[] { ("house", "house"), ("farm", "farm") })
                 Register(new Skill
                 {
                     Id = "build_" + type, Name = "Build " + type, Roles = new[] { "builder" },
@@ -123,15 +123,15 @@ namespace AgentWorld
                     Validate = (a, locs) => NeedLocation(a.location = PlanValidator.Loc(string.IsNullOrEmpty(a.location) ? a.target : a.location), locs, "location"),
                     Execute = async (c, ct) =>
                     {
-                        var builder = StructureBuilder.Instance ?? throw new Exception("sistema de construção ausente");
+                        var builder = StructureBuilder.Instance ?? throw new Exception("construction system missing");
                         var lm = Landmark.Find(c.Action.location);
-                        var site = builder.FindSite(lm.transform.position) ?? throw new Exception($"sem espaço livre perto de {c.Action.location}");
+                        var site = builder.FindSite(lm.transform.position) ?? throw new Exception($"no free space near {c.Action.location}");
                         await c.Brain.MoveTo(site + new Vector2(0, -1.2f), "canteiro", ct);
-                        c.Brain.SetActivity(AgentStatus.Acting, "construindo");
-                        c.Say($"Construindo {type} em ({site.x:0.#}, {site.y:0.#})...");
-                        var built = await builder.Construct(type, site, c.Npc.displayName, k => c.Brain.SetActivity(AgentStatus.Acting, $"construindo {k * 100:0}%"), ct);
+                        c.Brain.SetActivity(AgentStatus.Acting, "building");
+                        c.Say($"Building a {type} at ({site.x:0.#}, {site.y:0.#})...");
+                        var built = await builder.Construct(type, site, c.Npc.displayName, k => c.Brain.SetActivity(AgentStatus.Acting, $"building {k * 100:0}%"), ct);
                         c.Brain.Remember($"Built {built.id} near {c.Action.location}");
-                        c.Say($"{built.id} pronta perto de {c.Action.location}.");
+                        c.Say($"{built.id} is ready near {c.Action.location}.");
                         return $"built {built.id} ({label})";
                     },
                 });
@@ -151,7 +151,7 @@ namespace AgentWorld
                 },
                 Execute = async (c, ct) =>
                 {
-                    c.Brain.SetActivity(AgentStatus.Acting, "falando");
+                    c.Brain.SetActivity(AgentStatus.Acting, "talking");
                     c.Npc.Say(c.Action.message);
                     c.Say($"\"{c.Action.message}\"");
                     await Awaitable.WaitForSecondsAsync(1.5f, ct);
@@ -169,7 +169,7 @@ namespace AgentWorld
                 Validate = (a, _) => { if (a.seconds <= 0 || a.seconds > 10) a.seconds = Mathf.Clamp(a.seconds, 0.5f, 10f); return null; },
                 Execute = async (c, ct) =>
                 {
-                    c.Brain.SetActivity(AgentStatus.Acting, "esperando");
+                    c.Brain.SetActivity(AgentStatus.Acting, "waiting");
                     await Awaitable.WaitForSecondsAsync(c.Action.seconds, ct);
                     return $"waited {c.Action.seconds:0.#}s";
                 },

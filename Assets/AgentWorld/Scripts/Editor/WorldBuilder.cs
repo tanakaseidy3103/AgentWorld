@@ -38,12 +38,12 @@ namespace AgentWorld.EditorTools
 
         static readonly NpcDef[] Npcs =
         {
-            new NpcDef { id = "ada", name = "Ada", role = "Arquiteta de Agentes", ai = "assistant", shirt = C(150, 80, 180), hair = C(70, 40, 30), home = new Vector2(-3, 7),
-                lines = new[] { "Este laboratório vai abrigar a Living IDE.", "Cada computador será um portal para um agente.", "Use E nos computadores para abrir o terminal." } },
-            new NpcDef { id = "linus", name = "Linus", role = "Engenheiro de Sistemas", ai = "builder", shirt = C(70, 150, 90), hair = C(220, 190, 90), home = new Vector2(8, -6),
-                lines = new[] { "O kernel deste mundo ainda é simples, mas estável.", "Digite 'agents' num terminal para ver todos nós.", "Pressione F5 para salvar o mundo." } },
-            new NpcDef { id = "grace", name = "Grace", role = "Depuradora", ai = "explorer", shirt = C(200, 70, 70), hair = C(30, 30, 35), home = new Vector2(-7, 0),
-                lines = new[] { "Encontrei um bug... era uma mariposa!", "Testes primeiro, depois o deploy.", "Logo teremos agentes LLM conversando aqui." } },
+            new NpcDef { id = "ada", name = "Ada", role = "Coordinator", ai = "assistant", shirt = C(150, 80, 180), hair = C(70, 40, 30), home = new Vector2(-3, 7),
+                lines = new[] { "This lab will host the Living IDE.", "Every computer will be a portal to an agent.", "Press E at a computer to open the terminal." } },
+            new NpcDef { id = "linus", name = "Linus", role = "Builder", ai = "builder", shirt = C(70, 150, 90), hair = C(220, 190, 90), home = new Vector2(8, -6),
+                lines = new[] { "This world's kernel is still simple, but stable.", "Type 'agents' in a terminal to see all of us.", "Press F5 to save the world." } },
+            new NpcDef { id = "grace", name = "Grace", role = "Explorer", ai = "explorer", shirt = C(200, 70, 70), hair = C(30, 30, 35), home = new Vector2(-7, 0),
+                lines = new[] { "I found a bug... it was a moth!", "Tests first, then deploy.", "Soon LLM agents will be chatting here." } },
         };
 
         [MenuItem("AgentWorld/Rebuild World")]

@@ -46,7 +46,7 @@ namespace AgentWorld
         public static bool Run(string id, Action<string> output, out string error)
         {
             var sc = Find(id);
-            if (sc == null) { error = $"cenário desconhecido '{id}' (eval list)"; return false; }
+            if (sc == null) { error = $"unknown scenario '{id}' (eval list)"; return false; }
             if (!MissionControl.Start(sc.Objective, output, sc.Id, out error)) return false;
             pending = output;
             MissionControl.Finished -= OnFinished;

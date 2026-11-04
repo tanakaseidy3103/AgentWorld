@@ -48,7 +48,7 @@ namespace AgentWorld.Tests
             var shell = new LocalShellBackend();
             StringAssert.Contains("echo", shell.Execute("help", null));
             Assert.AreEqual("ola mundo", shell.Execute("echo ola mundo", null));
-            StringAssert.StartsWith("comando desconhecido", shell.Execute("rm -rf", null));
+            StringAssert.StartsWith("unknown command", shell.Execute("rm -rf", null));
         }
 
         [Test]

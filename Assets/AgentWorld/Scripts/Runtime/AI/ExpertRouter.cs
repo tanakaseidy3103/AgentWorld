@@ -23,7 +23,7 @@ namespace AgentWorld
             Specialists.Select(t => (t.role, t.name, $"{t.focus}; skills: {string.Join(", ", AgentConfigs.SkillsFor(t.role))}"));
 
         public static readonly string[] Intents = { "mission", "scout", "status", "capabilities", "explain", "unsupported" };
-        public const string Supported = "construir casas e fazendas (mission ...), explorar/inspecionar locais (Grace), perguntar o que um agente está fazendo, explicar a missão atual";
+        public const string Supported = "build houses and farms (mission ...), explore/inspect places (Grace), ask what an agent is doing or can do, explain the current mission";
 
         [Serializable]
         public class Route { public string intent, agent, reason, message; }
@@ -36,8 +36,8 @@ namespace AgentWorld
         {
             error = null;
             if (string.IsNullOrWhiteSpace(request)) { error = "pedido vazio"; return false; }
-            if (Busy) { error = "Ada ainda está encaminhando o pedido anterior"; return false; }
-            if (AgentHub.Find("assistant") == null) { error = "Ada não está na cena"; return false; }
+            if (Busy) { error = "Ada is still routing the previous request"; return false; }
+            if (AgentHub.Find("assistant") == null) { error = "Ada is not in the scene"; return false; }
             Busy = true;
             _ = RouteAsync(request.Trim(), output ?? (_ => { }));
             return true;
@@ -46,19 +46,19 @@ namespace AgentWorld
         static async Task RouteAsync(string request, Action<string> output)
         {
             var ada = AgentHub.Find("assistant");
-            ada.Ai.Show(AgentStatus.Thinking, "escolhendo especialista");
+            ada.Ai.Show(AgentStatus.Thinking, "choosing a specialist");
             try
             {
                 var raw = await LlamaAgentBrain.WithTimeout(t => AgentHub.Llm.Chat(SystemPrompt(), $"{AgentHub.WorldSummary()}Player request: {request}", true, t), CancellationToken.None);
                 var route = Parse(raw, out var problem);
-                if (route == null) { output($"[Unity] Ada não conseguiu classificar o pedido ({problem}). Tente: {Supported}."); return; }
+                if (route == null) { output($"[Unity] Ada could not classify the request ({problem}). Try: {Supported}."); return; }
                 ada.Ai.MarkDecision();
                 var who = Profiles.FirstOrDefault(p => p.role == RoleOf(route));
                 LastRoute = $"\"{Trunc(request, 50)}\" → {route.intent}{(who.name != null ? " · " + who.name : "")}";
-                output($"[Llama/Ada] especialista: {route.intent}{(who.name != null ? $" → {who.name} ({who.skills})" : "")} | \"{route.reason}\"");
+                output($"[Llama/Ada] specialist: {route.intent}{(who.name != null ? $" → {who.name} ({who.skills})" : "")} | \"{route.reason}\"");
                 Execute(route, request, output);
             }
-            catch (Exception e) { output($"[Unity] Ada indisponível: {e.Message}"); }
+            catch (Exception e) { output($"[Unity] Ada unavailable: {e.Message}"); }
             finally
             {
                 ada.Ai.Show(AgentStatus.Idle, "");
@@ -70,13 +70,13 @@ namespace AgentWorld
         {
             problem = null;
             int a = (raw ?? "").IndexOf('{'), b = (raw ?? "").LastIndexOf('}');
-            if (a < 0 || b <= a) { problem = "resposta sem JSON"; return null; }
+            if (a < 0 || b <= a) { problem = "response contains no JSON"; return null; }
             Route r;
             try { r = JsonUtility.FromJson<Route>(raw.Substring(a, b - a + 1)); }
-            catch (Exception e) { problem = "JSON inválido: " + e.Message; return null; }
+            catch (Exception e) { problem = "invalid JSON: " + e.Message; return null; }
             r.intent = (r.intent ?? "").Trim().ToLowerInvariant();
             r.agent = (r.agent ?? "").Trim().ToLowerInvariant();
-            if (!Intents.Contains(r.intent)) { problem = $"intenção desconhecida '{r.intent}'"; return null; }
+            if (!Intents.Contains(r.intent)) { problem = $"unknown intent '{r.intent}'"; return null; }
             r.reason = Trunc(r.reason ?? "", 160);
             r.message = Trunc(r.message ?? "", 200);
             return r;
@@ -87,13 +87,13 @@ namespace AgentWorld
             switch (r.intent)
             {
                 case "mission":
-                    if (!AgentConfigs.Has("builder", "build_house")) { output("[Unity] Linus não tem a skill build_house; a missão não pode ser executada."); break; }
-                    output(MissionControl.Start(request, output, out var err) ? "[Unity] missão iniciada: Ada coordena, Grace explora, Linus constrói" : "[Unity] " + err);
+                    if (!AgentConfigs.Has("builder", "build_house")) { output("[Unity] Linus does not have the build_house skill; the mission cannot run."); break; }
+                    output(MissionControl.Start(request, output, out var err) ? "[Unity] mission started: Ada coordinates, Grace explores, Linus builds" : "[Unity] " + err);
                     break;
                 case "scout":
                     var grace = AgentHub.Find("explorer");
-                    if (!AgentConfigs.Has("explorer", "inspect")) { output("[Unity] Grace não tem a skill inspect configurada."); break; }
-                    output(grace.Ai.Assign(request, output, out var gerr) ? "[Unity] tarefa enviada para Grace" : "[Unity] " + gerr);
+                    if (!AgentConfigs.Has("explorer", "inspect")) { output("[Unity] Grace does not have the inspect skill configured."); break; }
+                    output(grace.Ai.Assign(request, output, out var gerr) ? "[Unity] task sent to Grace" : "[Unity] " + gerr);
                     break;
                 case "status":
                     var target = AgentHub.Find(r.agent) ?? AgentHub.Agents.FirstOrDefault(n => request.ToLowerInvariant().Contains(n.displayName.ToLowerInvariant()));
@@ -107,30 +107,30 @@ namespace AgentWorld
                     output(asked == null ? string.Join("\n", AgentHub.Agents.Select(Capabilities)) : Capabilities(asked));
                     break;
                 default:
-                    var msg = string.IsNullOrWhiteSpace(r.message) ? "A equipe não sabe fazer isso." : r.message;
+                    var msg = string.IsNullOrWhiteSpace(r.message) ? "The team can't do that." : r.message;
                     AgentHub.Find("assistant").Say(msg);
-                    output($"[Ada] {msg} Posso ajudar com: {Supported}.");
+                    output($"[Ada] {msg} I can help with: {Supported}.");
                     break;
             }
         }
 
         // Status answers are built from live state, never from the model.
         static string Describe(NpcAgent n) =>
-            $"[Unity] {n.displayName} ({n.RoleTitle}): {n.Activity}{(n.Ai.Detail != "" ? " - " + n.Ai.Detail : "")}. Objetivo: {(n.Ai.Goal == "" ? "-" : n.Ai.Goal)}. Último resultado: {(n.Ai.LastResult == "" ? "-" : n.Ai.LastResult)}.";
+            $"[Unity] {n.displayName} ({n.RoleTitle}): {n.Activity}{(n.Ai.Detail != "" ? " - " + n.Ai.Detail : "")}. Goal: {(n.Ai.Goal == "" ? "-" : n.Ai.Goal)}. Last result: {(n.Ai.LastResult == "" ? "-" : n.Ai.LastResult)}.";
 
         static string Team() => string.Join("\n", AgentHub.Agents.Select(Describe));
 
         /// Answered from the skill registry, so it can never promise something unimplemented.
         public static string Capabilities(NpcAgent n) =>
-            $"[Unity] {n.displayName} ({n.RoleTitle}) pode: " + string.Join("; ", AgentConfigs.SkillsFor(n.agentRole).Select(SkillRegistry.Get).Where(s => s != null).Select(s => $"{s.Id} - {s.Description}"));
+            $"[Unity] {n.displayName} ({n.RoleTitle}) can: " + string.Join("; ", AgentConfigs.SkillsFor(n.agentRole).Select(SkillRegistry.Get).Where(s => s != null).Select(s => $"{s.Id} - {s.Description}"));
 
         public static string MissionSummary()
         {
             var m = MissionControl.State;
-            if (m.status == "None") return "[Unity] Nenhuma missão ainda. Aperte M e descreva uma, ex: build a small village near the lake.";
-            var built = $"{m.housesBuilt}/{m.housesWanted} casas" + (m.farmsWanted > 0 ? $", {m.farmsBuilt}/{m.farmsWanted} fazenda" : "");
-            var reports = m.sharedMemory.Count == 0 ? "nenhum relatório" : string.Join(", ", m.sharedMemory.Select(r => $"{r.location}={r.freeSites} livres"));
-            return $"[Unity] Missão \"{m.objective}\": {m.status}. {built}. Relatórios da Grace: {reports}. {m.result}";
+            if (m.status == "None") return "[Unity] No mission yet. Press M and describe one, e.g. build a small village near the lake.";
+            var built = $"{m.housesBuilt}/{m.housesWanted} houses" + (m.farmsWanted > 0 ? $", {m.farmsBuilt}/{m.farmsWanted} farm" : "");
+            var reports = m.sharedMemory.Count == 0 ? "no reports" : string.Join(", ", m.sharedMemory.Select(r => $"{r.location}={r.freeSites} free"));
+            return $"[Unity] Mission \"{m.objective}\": {m.status}. {built}. Grace's reports: {reports}. {m.result}";
         }
 
         static string RoleOf(Route r) => r.intent switch

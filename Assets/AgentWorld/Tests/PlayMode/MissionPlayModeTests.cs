@@ -139,7 +139,7 @@ namespace AgentWorld.Tests
             Assert.IsTrue(MissionControl.Start("village", null, out _));
             yield return WaitMission();
             Assert.AreEqual("Failed", MissionControl.State.status);
-            StringAssert.Contains("'north_meadow' não foi explorado", Log);
+            StringAssert.Contains("'north_meadow' was not explored", Log);
             Assert.IsEmpty(structures.Structures);
         }
 
@@ -150,9 +150,9 @@ namespace AgentWorld.Tests
             var panel = Object.FindAnyObjectByType<MissionPanel>();
             var bar = panel.MissionConsole();
             bar.Submit("please build one house at the plaza");
-            StringAssert.Contains("especialista", bar.log.Last());
+            StringAssert.Contains("specialist", bar.log.Last());
             while (ExpertRouter.Busy) yield return null;
-            Assert.IsTrue(bar.log.Any(l => l.Contains("missão iniciada")), string.Join("\n", bar.log));
+            Assert.IsTrue(bar.log.Any(l => l.Contains("mission started")), string.Join("\n", bar.log));
             yield return WaitMission();
             Assert.AreEqual("Succeeded", MissionControl.State.status);
             bar.Submit("status");
@@ -208,7 +208,7 @@ namespace AgentWorld.Tests
             Assert.IsTrue(MissionControl.Start("one house at the plaza", null, out _));
             yield return WaitMission();
             Assert.AreEqual("Succeeded", MissionControl.State.status, Log);
-            StringAssert.Contains("Grace não respondeu", Log);
+            StringAssert.Contains("Grace did not answer", Log);
             Assert.IsFalse(MissionControl.State.conversation.Any(m => m.from == "Grace"), "no fake line when Llama failed");
         }
 
@@ -243,19 +243,19 @@ namespace AgentWorld.Tests
             AgentHub.Llm = new MockLlm("{\"intent\":\"explain\",\"agent\":\"ada\",\"reason\":\"x\"}");
             ExpertRouter.Ask("Explain the current mission", output.Add, out _);
             while (ExpertRouter.Busy) yield return null;
-            Assert.IsTrue(output.Any(l => l.Contains("Nenhuma missão ainda")));
+            Assert.IsTrue(output.Any(l => l.Contains("No mission yet")));
 
             output.Clear();
             AgentHub.Llm = new MockLlm("{\"intent\":\"unsupported\",\"agent\":\"ada\",\"reason\":\"x\",\"message\":\"We cannot build bridges.\"}");
             ExpertRouter.Ask("Build a bridge over the lake", output.Add, out _);
             while (ExpertRouter.Busy) yield return null;
-            Assert.IsTrue(output.Any(l => l.Contains("We cannot build bridges.") && l.Contains("Posso ajudar")));
+            Assert.IsTrue(output.Any(l => l.Contains("We cannot build bridges.") && l.Contains("I can help with")));
 
             output.Clear();
             AgentHub.Llm = new MockLlm("{\"intent\":\"teleport\"}");
             ExpertRouter.Ask("teleport me somewhere nice", output.Add, out _);
             while (ExpertRouter.Busy) yield return null;
-            Assert.IsTrue(output.Any(l => l.Contains("não conseguiu classificar")));
+            Assert.IsTrue(output.Any(l => l.Contains("could not classify")));
             Assert.IsEmpty(structures.Structures);
         }
 
@@ -266,15 +266,15 @@ namespace AgentWorld.Tests
                 "{\"actions\":[{\"type\":\"move_to\",\"target\":\"plaza\"},{\"type\":\"inspect\",\"target\":\"plaza\"}]}");
             var pc = Object.FindObjectsByType<Computer>(FindObjectsSortMode.None).First(c => c.id == "lab-pc-1");
             pc.Submit("find a safe place to build");
-            StringAssert.Contains("especialista", pc.log.Last());
+            StringAssert.Contains("specialist", pc.log.Last());
             while (ExpertRouter.Busy) yield return null;
             var grace = AgentHub.Find("explorer");
             var end = Time.time + 30f;
             while ((grace.Ai.Busy || grace.Ai.Status == AgentStatus.Idle) && Time.time < end) yield return null;
             Assert.AreEqual(AgentStatus.Completed, grace.Ai.Status, string.Join("\n", pc.log));
-            Assert.IsTrue(pc.log.Any(l => l.Contains("tarefa enviada para Grace")));
+            Assert.IsTrue(pc.log.Any(l => l.Contains("task sent to Grace")));
             pc.Submit("rm -rf");
-            StringAssert.StartsWith("comando desconhecido", pc.log.Last());
+            StringAssert.StartsWith("unknown command", pc.log.Last());
         }
 
         [UnityTest]
@@ -291,7 +291,7 @@ namespace AgentWorld.Tests
             AgentHub.Llm = new MockLlm("{\"intent\":\"capabilities\",\"agent\":\"linus\",\"reason\":\"x\"}");
             ExpertRouter.Ask("What can Linus build?", output.Add, out _);
             while (ExpertRouter.Busy) yield return null;
-            Assert.IsTrue(output.Any(l => l.Contains("Linus (Builder) pode: move_to") && !l.Contains("build_house")), string.Join("\n", output));
+            Assert.IsTrue(output.Any(l => l.Contains("Linus (Builder) can: move_to") && !l.Contains("build_house")), string.Join("\n", output));
         }
 
         [UnityTest]
@@ -305,7 +305,7 @@ namespace AgentWorld.Tests
             while (grace.Ai.Busy && Time.time < end) yield return null;
             Assert.AreEqual(AgentStatus.Completed, grace.Ai.Status, string.Join("\n", output));
             var expected = structures.CountSites(Landmark.Find("east_field").transform.position);
-            Assert.IsTrue(output.Any(l => l.Contains($"east_field: {expected} terrenos livres")), string.Join("\n", output));
+            Assert.IsTrue(output.Any(l => l.Contains($"east_field: {expected} free building sites")), string.Join("\n", output));
         }
 
         [UnityTest]
@@ -344,8 +344,8 @@ namespace AgentWorld.Tests
                 var output = new System.Collections.Generic.List<string>();
                 ExpertRouter.Ask(text, output.Add, out _);
                 while (ExpertRouter.Busy) yield return null;
-                var got = output.FirstOrDefault(l => l.StartsWith("[Llama/Ada] especialista: ")) ?? "(no route)";
-                var ok = got.StartsWith($"[Llama/Ada] especialista: {expected}");
+                var got = output.FirstOrDefault(l => l.StartsWith("[Llama/Ada] specialist: ")) ?? "(no route)";
+                var ok = got.StartsWith($"[Llama/Ada] specialist: {expected}");
                 if (ok) hits++;
                 Debug.Log($"[route] {(ok ? "OK  " : "MISS")} \"{text}\" expected {expected} -> {got} || {string.Join(" | ", output.Skip(1))}");
                 MissionControl.Stop();
@@ -381,7 +381,7 @@ namespace AgentWorld.Tests
             yield return WaitMission();
             Assert.AreEqual("Failed", MissionControl.State.status);
             Assert.AreEqual(2, llm.Calls);
-            StringAssert.Contains("local inválido 'volcano'", Log);
+            StringAssert.Contains("invalid location 'volcano'", Log);
             Assert.IsEmpty(structures.Structures);
         }
 
@@ -394,7 +394,7 @@ namespace AgentWorld.Tests
             yield return WaitMission();
             Assert.AreEqual("Failed", MissionControl.State.status);
             Assert.AreEqual(3, llm.Calls, "delegation + selection + one retry");
-            StringAssert.Contains("não foi explorado", Log);
+            StringAssert.Contains("was not explored", Log);
             Assert.IsEmpty(structures.Structures);
         }
 
@@ -408,7 +408,7 @@ namespace AgentWorld.Tests
             structures.keepClear = new Rect(-20, -20, 40, 23.5f);
             yield return WaitMission();
             Assert.AreEqual("Succeeded", MissionControl.State.status, Log);
-            StringAssert.Contains("recuperação: lake sem espaço, tentando north_meadow", Log);
+            StringAssert.Contains("recovery: lake is full, trying north_meadow", Log);
             Assert.Greater(structures.Structures.Single().transform.position.y, 3f);
         }
 
@@ -432,7 +432,7 @@ namespace AgentWorld.Tests
             Assert.IsTrue(MissionControl.Start("build a village", null, out _));
             yield return WaitMission(15f);
             Assert.AreEqual("Failed", MissionControl.State.status);
-            StringAssert.Contains("indisponível", MissionControl.State.result);
+            StringAssert.Contains("unavailable", MissionControl.State.result);
         }
 
         [UnityTest]
@@ -440,10 +440,10 @@ namespace AgentWorld.Tests
         {
             var pc = Object.FindObjectsByType<Computer>(FindObjectsSortMode.None).First(c => c.id == "lab-pc-1");
             pc.Submit("mission status");
-            StringAssert.Contains("nenhuma missão", pc.log.Last());
+            StringAssert.Contains("no mission", pc.log.Last());
             AgentHub.Llm = Mock(Delegation("plaza", 1), Choice("plaza"));
             pc.Submit("mission build one house at the plaza");
-            StringAssert.Contains("missão iniciada", pc.log.Last());
+            StringAssert.Contains("mission started", pc.log.Last());
             yield return WaitMission();
             pc.Submit("mission status");
             StringAssert.Contains("Succeeded", pc.log.Last());

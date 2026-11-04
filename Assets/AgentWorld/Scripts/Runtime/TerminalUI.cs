@@ -53,7 +53,7 @@ namespace AgentWorld
             float w = Mathf.Min(Screen.width - MissionPanel.ReservedWidth - margin * 3f, size * 52f), h = Screen.height * 0.42f;
             var rect = new Rect(margin, Screen.height - h - margin, w, h);
             GUILayout.BeginArea(rect, panel);
-            GUILayout.Label($"Terminal - {Current.id}    [Enter] enviar   [Esc] fechar", title);
+            GUILayout.Label($"Terminal - {Current.id}    [Enter] send   [Esc] close", title);
             scroll = GUILayout.BeginScrollView(scroll, GUIStyle.none, GUI.skin.verticalScrollbar);
             GUILayout.Label(string.Join("\n", Current.log), text);
             GUILayout.EndScrollView();

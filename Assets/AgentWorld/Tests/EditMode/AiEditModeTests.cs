@@ -96,8 +96,8 @@ namespace AgentWorld.Tests
             foreach (var cmd in new[] { "echo", "whoami", "agents", "time", "ide", "clear", "agent builder", "agent stop", "world status", "ai status" })
                 StringAssert.Contains(cmd, help);
             Assert.AreEqual(LocalShellBackend.Clear, shell.Execute("clear", null));
-            StringAssert.StartsWith("uso:", shell.Execute("world", null));
-            StringAssert.StartsWith("agente desconhecido", shell.Execute("agent dragon voar", null));
+            StringAssert.StartsWith("usage:", shell.Execute("world", null));
+            StringAssert.StartsWith("unknown agent", shell.Execute("agent dragon voar", null));
         }
 
         [Test]
@@ -121,14 +121,14 @@ namespace AgentWorld.Tests
             Assert.AreEqual("scout", r.intent);
             Assert.AreEqual("grace", r.agent);
             Assert.IsNull(ExpertRouter.Parse("{\"intent\":\"delete_world\"}", out err));
-            StringAssert.Contains("desconhecida", err);
+            StringAssert.Contains("unknown intent", err);
             Assert.IsNull(ExpertRouter.Parse("no json here", out _));
         }
 
         [Test]
         public void Terminal_ShortUnknownCommand_StillErrors()
         {
-            StringAssert.StartsWith("comando desconhecido", new LocalShellBackend().Execute("rm -rf", null));
+            StringAssert.StartsWith("unknown command", new LocalShellBackend().Execute("rm -rf", null));
             StringAssert.Contains("Find a safe place", new LocalShellBackend().Execute("help", null));
         }
 

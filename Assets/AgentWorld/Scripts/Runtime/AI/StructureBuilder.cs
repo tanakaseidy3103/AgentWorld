@@ -72,8 +72,8 @@ namespace AgentWorld
         /// Visible construction: scaffolding and dust while the structure rises semi-transparent, then it becomes solid.
         public async Task<BuiltStructure> Construct(string type, Vector2 site, string builder, Action<float> progress, CancellationToken ct)
         {
-            var prefab = Prefab(type) ?? throw new Exception("estrutura indisponível: " + type);
-            if (Structures.Count() >= MaxStructures) throw new Exception($"limite de {MaxStructures} construções atingido");
+            var prefab = Prefab(type) ?? throw new Exception("structure unavailable: " + type);
+            if (Structures.Count() >= MaxStructures) throw new Exception($"limit of {MaxStructures} structures reached");
 
             var go = Instantiate(prefab, site, Quaternion.identity);
             var id = NextId(type);
@@ -118,7 +118,7 @@ namespace AgentWorld
             b.id = id; b.type = type; b.builtBy = builder;
             var lm = go.AddComponent<Landmark>();
             lm.id = id;
-            lm.description = $"{type} construída por {builder}";
+            lm.description = $"{type} built by {builder}";
             return b;
         }
 

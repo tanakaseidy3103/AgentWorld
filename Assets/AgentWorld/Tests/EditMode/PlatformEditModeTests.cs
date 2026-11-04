@@ -56,10 +56,10 @@ namespace AgentWorld.Tests
                 {""id"":""grace"",""role"":""explorer"",""skills"":[]}]}", out var errors);
             Assert.AreEqual(1, cfg.agents.Count);
             CollectionAssert.AreEqual(new[] { "move_to" }, cfg.agents[0].skills);
-            Assert.IsTrue(errors.Any(e => e.Contains("skill desconhecida 'fly'")));
-            Assert.IsTrue(errors.Any(e => e.Contains("'build_house' não é permitida")));
-            Assert.IsTrue(errors.Any(e => e.Contains("papel desconhecido 'wizard'")));
-            Assert.IsTrue(errors.Any(e => e.Contains("repetido")));
+            Assert.IsTrue(errors.Any(e => e.Contains("unknown skill 'fly'")));
+            Assert.IsTrue(errors.Any(e => e.Contains("'build_house' is not allowed")));
+            Assert.IsTrue(errors.Any(e => e.Contains("unknown role 'wizard'")));
+            Assert.IsTrue(errors.Any(e => e.Contains("duplicate")));
             Assert.IsNull(AgentConfigs.Parse("{ not json", out errors));
             Assert.IsNotEmpty(errors);
         }
@@ -70,7 +70,7 @@ namespace AgentWorld.Tests
             var plan = PlanValidator.Parse(@"{""actions"":[{""type"":""report_findings"",""target"":""lake""}]}", out _);
             CollectionAssert.IsEmpty(PlanValidator.Validate(plan, Locs, "explorer"));
             plan = PlanValidator.Parse(@"{""actions"":[{""type"":""report_findings"",""target"":""lake""}]}", out _);
-            Assert.IsTrue(PlanValidator.Validate(plan, Locs, "builder").Any(e => e.Contains("não tem a skill 'report_findings'")));
+            Assert.IsTrue(PlanValidator.Validate(plan, Locs, "builder").Any(e => e.Contains("does not have skill 'report_findings'")));
 
             // A config that removes build_farm from Linus makes farm plans invalid.
             AgentConfigs.Use(AgentConfigs.Parse(@"{""agents"":[{""id"":""linus"",""role"":""builder"",""skills"":[""move_to"",""build_house""]}]}", out _));

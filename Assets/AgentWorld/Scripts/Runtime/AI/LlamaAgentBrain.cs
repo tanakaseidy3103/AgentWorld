@@ -109,9 +109,9 @@ namespace AgentWorld
         public bool Assign(string goal, Action<string> output, out string error)
         {
             error = null;
-            if (string.IsNullOrWhiteSpace(goal)) { error = "tarefa vazia"; return false; }
-            if (Busy) { error = $"{Name} está ocupado ({Status}); use 'agent stop {npc.id}'"; return false; }
-            if (Time.time - lastCall < MinSecondsBetweenCalls) { error = "devagar: aguarde alguns segundos entre pedidos"; return false; }
+            if (string.IsNullOrWhiteSpace(goal)) { error = "empty task"; return false; }
+            if (Busy) { error = $"{Name} is busy ({Status}); use 'agent stop {npc.id}'"; return false; }
+            if (Time.time - lastCall < MinSecondsBetweenCalls) { error = "slow down: wait a few seconds between requests"; return false; }
             lastCall = Time.time;
             cts = new CancellationTokenSource();
             _ = Run(goal.Trim(), output ?? (_ => { }), cts.Token);
@@ -130,8 +130,8 @@ namespace AgentWorld
 
         Task Run(string goal, Action<string> output, CancellationToken ct) => Guarded(goal, output, async say =>
         {
-            Set(AgentStatus.Thinking, "consultando " + AgentHub.Llm.Model);
-            say($"Pensando... (Llama: {AgentHub.Llm.Model})");
+            Set(AgentStatus.Thinking, "asking " + AgentHub.Llm.Model);
+            say($"Thinking... (Llama: {AgentHub.Llm.Model})");
             var plan = await MakePlan(goal, ct);
             Set(AgentStatus.Planning, plan.goal);
             output($"[Llama] plano: {string.Join(" -> ", plan.actions)}");
@@ -155,25 +155,25 @@ namespace AgentWorld
             try
             {
                 await body(Say);
-                LastResult = "concluído: " + goal;
+                LastResult = "completed: " + goal;
                 Remember($"Completed task '{goal}'");
                 Set(AgentStatus.Completed, "");
-                Say("Tarefa concluída.");
+                Say("Task completed.");
                 return true;
             }
             catch (OperationCanceledException)
             {
-                LastResult = "cancelado: " + goal;
+                LastResult = "cancelled: " + goal;
                 Set(AgentStatus.Cancelled, "");
-                Say("Tarefa cancelada.");
+                Say("Task cancelled.");
                 return false;
             }
             catch (Exception e)
             {
-                LastResult = "falhou: " + e.Message;
+                LastResult = "failed: " + e.Message;
                 Remember($"Failed task '{goal}': {e.Message}");
                 Set(AgentStatus.Failed, e.Message);
-                Say("Falhou: " + e.Message);
+                Say("Failed: " + e.Message);
                 return false;
             }
             finally
@@ -197,7 +197,7 @@ namespace AgentWorld
                 if (attempt >= 2) throw new Exception("plano do LLM rejeitado: " + string.Join("; ", errors));
                 // One retry with the validator's complaints, then give up.
                 feedback = "\nYour previous plan was REJECTED: " + string.Join("; ", errors) + ". Return a corrected JSON plan.";
-                Set(AgentStatus.Thinking, "replanejando");
+                Set(AgentStatus.Thinking, "replanning");
             }
         }
 
@@ -212,7 +212,7 @@ namespace AgentWorld
                 if (Time.realtimeSinceStartup - start > AgentHub.LlmTimeoutSeconds)
                 {
                     linked.Cancel();
-                    throw new TimeoutException($"LLM não respondeu em {AgentHub.LlmTimeoutSeconds:0}s");
+                    throw new TimeoutException($"LLM did not answer within {AgentHub.LlmTimeoutSeconds:0}s");
                 }
                 await Awaitable.NextFrameAsync(ct);
             }
@@ -257,7 +257,7 @@ Example request ""{(AgentConfigs.Has(Role, "build_house") ? "build a house by th
             var near = Landmark.All.Where(l => l != target && Vector2.Distance(p, l.transform.position) < 7f).Select(l => l.id).OrderBy(s => s).ToList();
             var people = UnityEngine.Object.FindObjectsByType<NpcAgent>(FindObjectsSortMode.None)
                 .Where(n => Vector2.Distance(p, n.transform.position) < 5f).Select(n => n.displayName).ToList();
-            return $"{target.id} ({target.description}). Perto: {(near.Count > 0 ? string.Join(", ", near) : "nada")}. Pessoas: {(people.Count > 0 ? string.Join(", ", people) : "ninguém")}.";
+            return $"{target.id} ({target.description}). Nearby: {(near.Count > 0 ? string.Join(", ", near) : "nothing")}. People: {(people.Count > 0 ? string.Join(", ", people) : "nobody")}.";
         }
 
         // Lab walls only open at the bottom doorway (x≈0); route through it when entering or leaving.
@@ -266,7 +266,7 @@ Example request ""{(AgentConfigs.Has(Role, "build_house") ? "build a house by th
 
         internal async Task MoveTo(Vector2 dest, string label, CancellationToken ct)
         {
-            Set(AgentStatus.Moving, "indo para " + label);
+            Set(AgentStatus.Moving, "walking to " + label);
             var points = new List<Vector2>();
             bool fromLab = LabInside.Contains(npc.transform.position), toLab = LabInside.Contains(dest);
             if (fromLab && !toLab) points.AddRange(new[] { DoorIn, DoorOut });
@@ -279,7 +279,7 @@ Example request ""{(AgentConfigs.Has(Role, "build_house") ? "build a house by th
                 var start = Time.time;
                 while (Vector2.Distance(npc.transform.position, p) > 0.3f)
                 {
-                    if (Time.time - start > AgentHub.MoveTimeoutSeconds) throw new Exception($"não consegui chegar em {label}");
+                    if (Time.time - start > AgentHub.MoveTimeoutSeconds) throw new Exception($"could not reach {label}");
                     await Awaitable.NextFrameAsync(ct);
                 }
             }
@@ -292,8 +292,8 @@ Example request ""{(AgentConfigs.Has(Role, "build_house") ? "build a house by th
         public bool Chat(string message, Action<string> output, out string error)
         {
             error = null;
-            if (chatting) { error = $"{Name} ainda está respondendo..."; return false; }
-            if (Time.time - lastCall < MinSecondsBetweenCalls) { error = "devagar: aguarde alguns segundos"; return false; }
+            if (chatting) { error = $"{Name} is still answering..."; return false; }
+            if (Time.time - lastCall < MinSecondsBetweenCalls) { error = "slow down: wait a few seconds"; return false; }
             lastCall = Time.time;
             chatting = true;
             _ = ChatAsync(message.Trim(), output);
@@ -318,7 +318,7 @@ You cannot act during chat. If the player wants something done, tell them to typ
                 npc.Say(reply);
                 output($"[{Name}] {reply}");
             }
-            catch (Exception e) { output($"[{Name}] (IA indisponível: {e.Message})"); }
+            catch (Exception e) { output($"[{Name}] (AI unavailable: {e.Message})"); }
             finally { chatting = false; }
         }
 

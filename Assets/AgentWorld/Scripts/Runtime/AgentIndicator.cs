@@ -50,7 +50,7 @@ namespace AgentWorld
                 case AgentStatus.Thinking:
                 case AgentStatus.Planning: return "think";
                 case AgentStatus.Moving: return ai.Role == "explorer" ? "scout" : "walk";
-                case AgentStatus.Acting: return ai.Role == "builder" && ai.Detail.StartsWith("construindo") ? "build" : ai.Role == "explorer" ? "scout" : "think";
+                case AgentStatus.Acting: return ai.Role == "builder" && ai.Detail.StartsWith("building") ? "build" : ai.Role == "explorer" ? "scout" : "think";
                 case AgentStatus.Completed: return Time.time - changedAt < 3f ? "done" : null;
                 case AgentStatus.Failed:
                 case AgentStatus.Cancelled: return Time.time - changedAt < 5f ? "fail" : null;

@@ -66,22 +66,22 @@ namespace AgentWorld
             errors = new List<string>();
             AgentConfigFile cfg;
             try { cfg = JsonUtility.FromJson<AgentConfigFile>(json); }
-            catch (Exception e) { errors.Add("JSON inválido: " + e.Message + " (usando padrões)"); return null; }
-            if (cfg?.agents == null || cfg.agents.Count == 0) { errors.Add("nenhum agente definido (usando padrões)"); return null; }
+            catch (Exception e) { errors.Add("invalid JSON: " + e.Message + " (using defaults)"); return null; }
+            if (cfg?.agents == null || cfg.agents.Count == 0) { errors.Add("no agents defined (using defaults)"); return null; }
 
             var seen = new HashSet<string>();
             foreach (var a in cfg.agents.ToList())
             {
                 a.id = (a.id ?? "").Trim().ToLowerInvariant();
                 a.role = (a.role ?? "").Trim().ToLowerInvariant();
-                if (a.id == "" || !seen.Add(a.id)) { errors.Add($"agente com id vazio ou repetido '{a.id}' ignorado"); cfg.agents.Remove(a); continue; }
-                if (!Roles.Contains(a.role)) { errors.Add($"{a.id}: papel desconhecido '{a.role}' (use {string.Join(", ", Roles)})"); cfg.agents.Remove(a); continue; }
+                if (a.id == "" || !seen.Add(a.id)) { errors.Add($"agent with empty or duplicate id '{a.id}' ignored"); cfg.agents.Remove(a); continue; }
+                if (!Roles.Contains(a.role)) { errors.Add($"{a.id}: unknown role '{a.role}' (use {string.Join(", ", Roles)})"); cfg.agents.Remove(a); continue; }
                 a.skills = (a.skills ?? new List<string>()).Select(s => (s ?? "").Trim().ToLowerInvariant()).Distinct().ToList();
                 foreach (var s in a.skills.ToList())
                 {
                     var skill = SkillRegistry.Get(s);
-                    if (skill == null) { errors.Add($"{a.id}: skill desconhecida '{s}' removida"); a.skills.Remove(s); }
-                    else if (!skill.Roles.Contains(a.role)) { errors.Add($"{a.id}: skill '{s}' não é permitida para o papel {a.role}; removida"); a.skills.Remove(s); }
+                    if (skill == null) { errors.Add($"{a.id}: unknown skill '{s}' removed"); a.skills.Remove(s); }
+                    else if (!skill.Roles.Contains(a.role)) { errors.Add($"{a.id}: skill '{s}' is not allowed for role {a.role}; removed"); a.skills.Remove(s); }
                 }
             }
             return cfg.agents.Count == 0 ? null : cfg;

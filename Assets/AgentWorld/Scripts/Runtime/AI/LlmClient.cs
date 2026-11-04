@@ -62,7 +62,7 @@ namespace AgentWorld
             var text = await Send(UnityWebRequest.kHttpVerbPOST, "/api/chat", body, ct);
             var res = JsonUtility.FromJson<ChatRes>(text);
             if (!string.IsNullOrEmpty(res?.error)) throw new Exception("Ollama: " + res.error);
-            return res?.message?.content ?? throw new Exception("Ollama: resposta vazia");
+            return res?.message?.content ?? throw new Exception("Ollama: empty response");
         }
 
         public async Task<string[]> ListModels(CancellationToken ct)
@@ -86,8 +86,8 @@ namespace AgentWorld
             {
                 var detail = req.downloadHandler?.text;
                 if (req.responseCode == 404 && detail != null && detail.Contains("not found"))
-                    throw new Exception($"modelo '{Model}' não instalado. Rode: ollama pull {Model}");
-                throw new Exception($"Ollama indisponível em {endpoint} ({req.error})");
+                    throw new Exception($"model '{Model}' is not installed. Run: ollama pull {Model}");
+                throw new Exception($"Ollama unavailable at {endpoint} ({req.error})");
             }
             return req.downloadHandler.text;
         }

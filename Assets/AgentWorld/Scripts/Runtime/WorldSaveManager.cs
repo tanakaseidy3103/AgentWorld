@@ -15,14 +15,14 @@ namespace AgentWorld
 
         void Start()
         {
-            if (autoLoad && Load()) Notify("Mundo carregado");
+            if (autoLoad && Load()) Notify("World loaded");
         }
 
         void Update()
         {
             if (TerminalUI.IsOpen) return;
-            if (Input.GetKeyDown(KeyCode.F5)) { Save(); Notify("Mundo salvo"); }
-            if (Input.GetKeyDown(KeyCode.F9)) Notify(Load() ? "Mundo carregado" : "Nenhum save encontrado");
+            if (Input.GetKeyDown(KeyCode.F5)) { Save(); Notify("World saved"); }
+            if (Input.GetKeyDown(KeyCode.F9)) Notify(Load() ? "World loaded" : "No save found");
         }
 
         void OnApplicationQuit() => Save();
@@ -80,7 +80,7 @@ namespace AgentWorld
 
         void OnGUI()
         {
-            GUI.Label(new Rect(10, 8, 800, 22), "WASD mover | E interagir (PC = terminal, NPC = conversa IA) | M missão | Tab painel | F5 salvar | F9 carregar | terminal: help");
+            GUI.Label(new Rect(10, 8, 800, 22), "WASD move | E interact (PC = terminal, NPC = AI chat) | M mission | Tab panel | F5 save | F9 load | terminal: help");
             if (Time.time < toastUntil) GUI.Box(new Rect(Screen.width - 210, 10, 200, 26), toast);
         }
     }

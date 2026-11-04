@@ -62,14 +62,14 @@ namespace AgentWorld
         public static bool Start(string objective, Action<string> print, string scenario, out string error)
         {
             error = null;
-            if (string.IsNullOrWhiteSpace(objective)) { error = "missão vazia"; return false; }
-            if (Running) { error = "já existe uma missão em andamento (mission stop)"; return false; }
+            if (string.IsNullOrWhiteSpace(objective)) { error = "empty mission"; return false; }
+            if (Running) { error = "a mission is already running (mission stop)"; return false; }
             var team = new[] { "assistant", "explorer", "builder" }.Select(AgentHub.Find).ToArray();
             if (team.Any(a => a == null)) { error = "Ada, Grace e Linus precisam estar na cena"; return false; }
-            if (team.Any(a => a.Ai.Busy)) { error = "um agente está ocupado; use agent stop"; return false; }
+            if (team.Any(a => a.Ai.Busy)) { error = "an agent is busy; use agent stop"; return false; }
             // The pipeline needs these skills; agents.json may have removed them.
             foreach (var (role, skill) in new[] { ("explorer", "move_to"), ("explorer", "inspect"), ("builder", "move_to"), ("builder", "build_house") })
-                if (!AgentConfigs.Has(role, skill)) { error = $"{AgentHub.Find(role).displayName} não tem a skill '{skill}' (veja StreamingAssets/agents.json)"; return false; }
+                if (!AgentConfigs.Has(role, skill)) { error = $"{AgentHub.Find(role).displayName} does not have skill '{skill}' (see StreamingAssets/agents.json)"; return false; }
 
             State = new MissionState { objective = objective.Trim(), status = "Planning", knowledge = Merge(State.knowledge, State.sharedMemory), model = AgentHub.Llm.Model, scenario = scenario ?? "" };
             startedAt = Time.realtimeSinceStartup;
@@ -87,8 +87,8 @@ namespace AgentWorld
             try
             {
                 // 1. Ada delegates (Llama decision).
-                ada.Ai.Show(AgentStatus.Thinking, "planejando a missão");
-                Log($"[Ada] Pensando na missão (Llama: {AgentHub.Llm.Model})...");
+                ada.Ai.Show(AgentStatus.Thinking, "planning the mission");
+                Log($"[Ada] Thinking about the mission (Llama: {AgentHub.Llm.Model})...");
                 var known = State.knowledge.Count == 0 ? "" :
                     "Grace's earlier measurements (may be outdated; she will re-measure): " + string.Join(", ", State.knowledge.Select(r => $"{r.location}={r.freeSites} free")) + "\n";
                 var plan = await AskJson<Delegation>("Ada", DelegationPrompt(), $"{AgentHub.WorldSummary()}{known}Mission: {State.objective}", ValidateDelegation, ct);
@@ -96,7 +96,7 @@ namespace AgentWorld
                 if (plan.Infeasible)
                 {
                     // Ada (Llama) judged the request outside the team's abilities: say so instead of pretending.
-                    Log($"[Llama/Ada] missão não suportada: \"{plan.message}\"");
+                    Log($"[Llama/Ada] mission not supported: \"{plan.message}\"");
                     ada.Say(plan.message);
                     State.status = "Unsupported";
                     State.result = plan.message;
@@ -104,18 +104,18 @@ namespace AgentWorld
                 }
                 State.housesWanted = plan.houses;
                 State.farmsWanted = plan.farms;
-                Log($"[Llama/Ada] explorar: {string.Join(", ", plan.explore)} | casas: {plan.houses} | fazendas: {plan.farms} | \"{plan.message}\"");
+                Log($"[Llama/Ada] explore: {string.Join(", ", plan.explore)} | houses: {plan.houses} | farms: {plan.farms} | \"{plan.message}\"");
                 if (!string.IsNullOrWhiteSpace(plan.message)) { ada.Say(plan.message); AddMessage("Ada", "Grace, Linus", plan.message); }
-                ada.Ai.Show(AgentStatus.Idle, "aguardando relatórios");
+                ada.Ai.Show(AgentStatus.Idle, "waiting for reports");
 
                 // 2. Grace explores; Unity measures real free space and writes it to shared memory.
                 State.status = "Exploring";
                 foreach (var loc in plan.explore)
                 {
-                    var task = AddTask("Grace", $"inspecionar {loc}");
-                    var ok = await grace.Ai.Perform($"inspecionar {loc}", Actions(("move_to", loc), ("inspect", loc)), Log, ct);
+                    var task = AddTask("Grace", $"inspect {loc}");
+                    var ok = await grace.Ai.Perform($"inspect {loc}", Actions(("move_to", loc), ("inspect", loc)), Log, ct);
                     ct.ThrowIfCancellationRequested();
-                    if (!ok) { Finish(task, "Failed"); Log($"[Unity] Grace não conseguiu inspecionar {loc}: {grace.Ai.LastResult}"); continue; }
+                    if (!ok) { Finish(task, "Failed"); Log($"[Unity] Grace could not inspect {loc}: {grace.Ai.LastResult}"); continue; }
                     var lm = Landmark.Find(loc);
                     var report = new SiteReport
                     {
@@ -126,20 +126,20 @@ namespace AgentWorld
                     State.sharedMemory.Add(report);
                     ada.Ai.Remember($"Grace reported {loc}: {report.freeSites} free building sites");
                     Finish(task, "Done");
-                    Log($"[Grace -> memória] {loc}: {report.freeSites} terrenos livres (perto: {(report.nearby == "" ? "nada" : report.nearby)})");
+                    Log($"[Grace -> memory] {loc}: {report.freeSites} free building sites (nearby: {(report.nearby == "" ? "nothing" : report.nearby)})");
                 }
-                if (!State.sharedMemory.Any(r => r.freeSites > 0)) throw new Exception("nenhum local explorado tem espaço para construir");
+                if (!State.sharedMemory.Any(r => r.freeSites > 0)) throw new Exception("no explored place has room to build");
 
                 // 2b. Short team discussion (Llama), grounded in Grace's measured numbers; feeds Ada's decision.
                 await Discuss(grace, linus, ct);
 
                 // 3. Ada chooses sites from the reports (Llama decision, validated against capacity).
                 State.status = "Selecting";
-                ada.Ai.Show(AgentStatus.Thinking, "escolhendo terrenos");
+                ada.Ai.Show(AgentStatus.Thinking, "choosing sites");
                 var choice = await AskJson<SiteChoice>("Ada", SelectionPrompt(), SelectionUser(), ValidateChoice, ct);
                 ada.Ai.MarkDecision();
-                Log($"[Llama/Ada] casas em: {string.Join(", ", choice.build_at)}{(State.farmsWanted > 0 ? $" | fazenda em: {choice.farm_at}" : "")} | motivo: \"{choice.reason}\"");
-                ada.Ai.Show(AgentStatus.Idle, "acompanhando a obra");
+                Log($"[Llama/Ada] houses at: {string.Join(", ", choice.build_at)}{(State.farmsWanted > 0 ? $" | farm at: {choice.farm_at}" : "")} | reason: \"{choice.reason}\"");
+                ada.Ai.Show(AgentStatus.Idle, "supervising construction");
                 ada.Say(choice.reason);
                 AddMessage("Ada", "Linus", choice.reason);
 
@@ -149,8 +149,8 @@ namespace AgentWorld
                 if (State.farmsWanted > 0) jobs.Add(("farm", choice.farm_at));
                 foreach (var (type, site) in jobs)
                 {
-                    var label = type == "farm" ? "fazenda" : "casa";
-                    var task = AddTask("Linus", $"construir {label} perto de {site}");
+                    var label = type == "farm" ? "farm" : "house";
+                    var task = AddTask("Linus", $"build {label} near {site}");
                     var target = site;
                     var built = false;
                     while (task.attempts <= MaxRetries)
@@ -161,14 +161,14 @@ namespace AgentWorld
                                 .OrderByDescending(r => choice.build_at.Contains(r.location)).Select(r => r.location).FirstOrDefault();
                             if (alt == null) break;
                             State.recoveries++;
-                            Log($"[Unity] recuperação: {target} sem espaço, tentando {alt}");
+                            Log($"[Unity] recovery: {target} is full, trying {alt}");
                             target = alt;
                         }
                         task.attempts++;
-                        var ok = await linus.Ai.Perform($"construir {label} perto de {target}", Actions(type, ("move_to", target), ("build", target)), Log, ct);
+                        var ok = await linus.Ai.Perform($"build {label} near {target}", Actions(type, ("move_to", target), ("build", target)), Log, ct);
                         ct.ThrowIfCancellationRequested();
                         if (ok) { if (type == "farm") State.farmsBuilt++; else State.housesBuilt++; built = true; break; }
-                        Log($"[Unity] tentativa {task.attempts} falhou: {linus.Ai.LastResult}");
+                        Log($"[Unity] attempt {task.attempts} failed: {linus.Ai.LastResult}");
                     }
                     Finish(task, built ? "Done" : "Failed");
                 }
@@ -180,7 +180,7 @@ namespace AgentWorld
             catch (OperationCanceledException)
             {
                 State.status = "Cancelled";
-                State.result = $"cancelada ({Built()})";
+                State.result = $"cancelled ({Built()})";
                 foreach (var a in new[] { grace, linus }) a.Ai.Stop();
             }
             catch (Exception e)
@@ -193,8 +193,8 @@ namespace AgentWorld
                 foreach (var t in State.tasks.Where(t => t.status == "Running" || t.status == "Pending")) t.status = State.status == "Cancelled" ? "Cancelled" : "Failed";
                 ada.Ai.Show(AgentStatus.Idle, "");
                 State.durationSeconds = Time.realtimeSinceStartup - startedAt;
-                Log($"[Unity] Missão {State.status}: {State.result}");
-                ada.Say($"Missão {State.status}: {State.result}");
+                Log($"[Unity] Mission {State.status}: {State.result}");
+                ada.Say($"Mission {State.status}: {State.result}");
                 State.knowledge = Merge(State.knowledge, State.sharedMemory);
                 Finished?.Invoke(State);
                 cts?.Dispose();
@@ -224,7 +224,7 @@ namespace AgentWorld
         /// One Llama-generated line of dialogue. Failures are logged and skipped; they never fake a reply.
         static async Task<string> Speak(NpcAgent who, string to, string system, string user, CancellationToken ct)
         {
-            who.Ai.Show(AgentStatus.Acting, "falando");
+            who.Ai.Show(AgentStatus.Acting, "talking");
             try
             {
                 var raw = await LlamaAgentBrain.WithTimeout(t => AgentHub.Llm.Chat(system, user, false, t), ct);
@@ -240,7 +240,7 @@ namespace AgentWorld
             catch (Exception e)
             {
                 State.dialogueFailures++;
-                Log($"[Unity] {who.displayName} não respondeu ({e.Message}); a missão continua sem essa fala");
+                Log($"[Unity] {who.displayName} did not answer ({e.Message}); the mission continues without that line");
                 return null;
             }
             finally { who.Ai.Show(AgentStatus.Idle, ""); }
@@ -276,15 +276,15 @@ namespace AgentWorld
                 try
                 {
                     int a = raw.IndexOf('{'), b = raw.LastIndexOf('}');
-                    if (a < 0 || b <= a) errors.Add("resposta sem JSON");
+                    if (a < 0 || b <= a) errors.Add("response contains no JSON");
                     else value = JsonUtility.FromJson<T>(raw.Substring(a, b - a + 1));
                 }
-                catch (Exception e) { errors.Add("JSON inválido: " + e.Message); }
+                catch (Exception e) { errors.Add("invalid JSON: " + e.Message); }
                 if (value != null) errors.AddRange(validate(value));
                 if (errors.Count == 0) return value;
                 State.invalidResponses++;
-                Log($"[Unity] resposta de {who} rejeitada (tentativa {attempt}/{MaxRetries}): {string.Join("; ", errors)}");
-                if (attempt >= MaxRetries) throw new Exception($"{who}: plano do LLM rejeitado após {attempt} tentativas");
+                Log($"[Unity] {who}'s answer rejected (attempt {attempt}/{MaxRetries}): {string.Join("; ", errors)}");
+                if (attempt >= MaxRetries) throw new Exception($"{who}: LLM plan rejected after {attempt} attempts");
                 feedback = $"\nYour previous answer was REJECTED: {string.Join("; ", errors)}. Return corrected JSON.";
             }
         }
@@ -314,17 +314,17 @@ Example: {{""feasible"":""yes"",""explore"":[""plaza"",""east_field""],""houses"
             var errors = new List<string>();
             if (d.Infeasible)
             {
-                if (string.IsNullOrWhiteSpace(d.message)) errors.Add("feasible=no exige uma explicação em message");
+                if (string.IsNullOrWhiteSpace(d.message)) errors.Add("feasible=no requires an explanation in message");
                 else if (d.message.Length > 200) d.message = d.message.Substring(0, 200);
                 return errors;
             }
             d.explore = (d.explore ?? new List<string>()).Select(Norm).Distinct().ToList();
-            if (d.explore.Count == 0) errors.Add("explore vazio");
+            if (d.explore.Count == 0) errors.Add("explore is empty");
             if (d.explore.Count > MaxExplore) d.explore = d.explore.Take(MaxExplore).ToList();
-            errors.AddRange(d.explore.Where(id => !Ids.Contains(id)).Select(id => $"local inválido '{id}'"));
+            errors.AddRange(d.explore.Where(id => !Ids.Contains(id)).Select(id => $"invalid location '{id}'"));
             d.houses = Mathf.Clamp(d.houses, 0, MaxHouses);
             d.farms = Mathf.Clamp(d.farms, 0, AgentConfigs.Has("builder", "build_farm") ? MaxFarms : 0);
-            if (d.houses + d.farms == 0) errors.Add("nada para construir: houses e farms são 0");
+            if (d.houses + d.farms == 0) errors.Add("nothing to build: houses and farms are 0");
             if (d.message?.Length > 200) d.message = d.message.Substring(0, 200);
             return errors;
         }
@@ -349,17 +349,17 @@ Write the reason in the same language as the mission.";
         {
             var errors = new List<string>();
             c.build_at = (c.build_at ?? new List<string>()).Select(Norm).Where(s => s != "").Take(State.housesWanted).ToList();
-            if (State.housesWanted > 0 && c.build_at.Count == 0) errors.Add("build_at vazio");
+            if (State.housesWanted > 0 && c.build_at.Count == 0) errors.Add("build_at is empty");
             c.farm_at = State.farmsWanted > 0 ? Norm(c.farm_at) : null;
-            if (State.farmsWanted > 0 && c.farm_at == "") errors.Add("farm_at vazio");
+            if (State.farmsWanted > 0 && c.farm_at == "") errors.Add("farm_at is empty");
             var uses = c.farm_at == null || c.farm_at == "" ? c.build_at : c.build_at.Append(c.farm_at).ToList();
             foreach (var g in uses.GroupBy(s => s))
             {
                 var r = State.sharedMemory.FirstOrDefault(x => x.location == g.Key);
-                if (r == null) errors.Add($"'{g.Key}' não foi explorado");
-                else if (g.Count() > r.freeSites) errors.Add($"'{g.Key}' só tem {r.freeSites} terrenos livres");
+                if (r == null) errors.Add($"'{g.Key}' was not explored");
+                else if (g.Count() > r.freeSites) errors.Add($"'{g.Key}' only has {r.freeSites} free sites");
             }
-            if (string.IsNullOrWhiteSpace(c.reason)) c.reason = "Locais escolhidos.";
+            if (string.IsNullOrWhiteSpace(c.reason)) c.reason = "Sites chosen.";
             return errors;
         }
 
@@ -371,7 +371,7 @@ Write the reason in the same language as the mission.";
             s.type == "build" ? new AgentAction { type = "build", structure = structure, location = s.loc } : new AgentAction { type = s.type, target = s.loc }).ToList();
 
         static string Built() =>
-            $"{State.housesBuilt}/{State.housesWanted} casas" + (State.farmsWanted > 0 ? $", {State.farmsBuilt}/{State.farmsWanted} fazenda" : "") + " construídas";
+            $"{State.housesBuilt}/{State.housesWanted} houses" + (State.farmsWanted > 0 ? $", {State.farmsBuilt}/{State.farmsWanted} farm" : "") + " built";
 
         static MissionTask AddTask(string agent, string description)
         {
