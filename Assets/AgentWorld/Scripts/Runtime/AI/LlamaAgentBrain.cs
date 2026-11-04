@@ -134,7 +134,7 @@ namespace AgentWorld
             say($"Thinking... (Llama: {AgentHub.Llm.Model})");
             var plan = await MakePlan(goal, ct);
             Set(AgentStatus.Planning, plan.goal);
-            output($"[Llama] plano: {string.Join(" -> ", plan.actions)}");
+            output($"[Llama] plan: {string.Join(" -> ", plan.actions)}");
             await ExecuteAll(plan.actions, output, say, ct);
         });
 
@@ -194,7 +194,7 @@ namespace AgentWorld
                 var plan = PlanValidator.Parse(raw, out var parseError);
                 var errors = plan == null ? new List<string> { parseError } : PlanValidator.Validate(plan, locations, Role);
                 if (errors.Count == 0) return plan;
-                if (attempt >= 2) throw new Exception("plano do LLM rejeitado: " + string.Join("; ", errors));
+                if (attempt >= 2) throw new Exception("LLM plan rejected: " + string.Join("; ", errors));
                 // One retry with the validator's complaints, then give up.
                 feedback = "\nYour previous plan was REJECTED: " + string.Join("; ", errors) + ". Return a corrected JSON plan.";
                 Set(AgentStatus.Thinking, "replanning");

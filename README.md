@@ -89,7 +89,7 @@ Prebuilt player: **AgentWorld → Build Windows** writes `Builds/Windows/`. Ship
 
 Settings (environment variables): `AGENTWORLD_MODEL` (default `llama3.2`), `AGENTWORLD_OLLAMA_URL`
 (default `http://localhost:11434`), `AGENTWORLD_TIMEOUT` (seconds per HTTP request, default 90).
-If Ollama isn't running, Mission Control shows *offline* and missions fail with a clear message.
+If Ollama isn't running, Mission Control shows *offline (start Ollama)* and missions fail with a clear message.
 Keep Ollama local: don't expose port 11434 to the internet.
 
 **Hardware.** Tested only on the laptop above. Llama 3.2 3B needs about 2 GB of disk and a few GB of RAM.
@@ -115,7 +115,7 @@ eval list | eval run village|farm|unsupported | eval report   measured evaluatio
 world status | world structures | ai status | help, echo, whoami, agents, time, ide, clear
 ```
 
-The in-game UI text is in Portuguese (the team's language). Requests work in English or Portuguese.
+The in-game UI is in English. Requests work in any language Llama understands (tested in English and Portuguese).
 
 ## Architecture
 

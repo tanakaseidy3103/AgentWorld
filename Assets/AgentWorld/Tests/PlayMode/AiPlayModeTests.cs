@@ -105,7 +105,7 @@ namespace AgentWorld.Tests
             var house = structures.Structures.Single();
             Assert.Less(Vector2.Distance(house.transform.position, Landmark.Find("lake").transform.position), 10f);
             Assert.IsTrue(house.GetComponent<Collider2D>().enabled);
-            Assert.IsTrue(output.Any(l => l.StartsWith("[Llama] plano")));
+            Assert.IsTrue(output.Any(l => l.StartsWith("[Llama] plan")));
             Assert.IsTrue(output.Any(l => l.StartsWith("[Unity]")));
 
             var mgr = Object.FindAnyObjectByType<WorldSaveManager>();

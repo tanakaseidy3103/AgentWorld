@@ -90,12 +90,12 @@ SkillRegistry.Register(new Skill
     Safety = "Read-only; the number is computed by Unity, never by the model.",
     Example = "{\"type\":\"report_findings\",\"target\":\"<location id>\"}",
     // 1. Validation: normalize the id and require a real landmark.
-    Validate = (a, locs) => locs.Contains(a.target = PlanValidator.Loc(a.target)) ? null : $"local inválido '{a.target}'",
+    Validate = (a, locs) => locs.Contains(a.target = PlanValidator.Loc(a.target)) ? null : $"invalid location '{a.target}'",
     // 2. Execution on the main thread, with real world data.
     Execute = (c, ct) =>
     {
         var free = StructureBuilder.Instance.CountSites(Landmark.Find(c.Action.target).transform.position);
-        var line = $"{c.Action.target}: {free} terrenos livres para construir";
+        var line = $"{c.Action.target}: {free} free building sites";
         c.Brain.Remember($"Measured {c.Action.target}: {free} free building sites");
         c.Say(line);
         c.Npc.Say(line);
@@ -108,6 +108,54 @@ Try it: `agent explorer how much free land is there in the east field?`. Grace's
 `report_findings`, because it is in her skill list and in her prompt, and the number always comes from Unity.
 Whether Llama 3.2 picks that skill for a given wording wasn't measured. The execution path is covered with a
 mock plan by the PlayMode test `Grace_ReportFindingsSkill_MeasuresRealLand`.
+
+### Complete, tested example: a new C# skill for an existing agent
+
+This code is copied from `Assets/AgentWorld/Tests/PlayMode/CustomSkillExampleTests.cs`, and that test runs it.
+It adds a `count_people` skill and gives it to Grace.
+
+```csharp
+SkillRegistry.Register(new Skill
+{
+    Id = "count_people",
+    Name = "Count people",
+    Description = "Count how many characters are within 5 units of a location.",
+    Roles = new[] { "explorer", "assistant" },
+    Parameters = new[] { "target: location id" },
+    Safety = "Read-only.",
+    Example = "{\"type\":\"count_people\",\"target\":\"<location id>\"}",
+    Validate = (a, locations) =>
+    {
+        a.target = PlanValidator.Loc(a.target);
+        return locations.Contains(a.target) ? null : $"invalid location '{a.target}'";
+    },
+    Execute = (c, ct) =>
+    {
+        Vector2 p = Landmark.Find(c.Action.target).transform.position;
+        var n = Object.FindObjectsByType<NpcAgent>(FindObjectsSortMode.None).Count(x => Vector2.Distance(p, x.transform.position) < 5f);
+        var line = $"{n} people near {c.Action.target}";
+        c.Say(line);
+        return Task.FromResult(line);
+    },
+});
+```
+
+Then add `"count_people"` to Grace's `skills` in `agents.json`:
+
+```json
+{ "id": "grace", "role": "explorer", "title": "Explorer",
+  "skills": ["move_to", "inspect", "report_findings", "count_people", "speak", "wait"] }
+```
+
+What the test checks:
+1. With the skill registered, that config validates without errors.
+2. A plan `{"actions":[{"type":"count_people","target":"lab"}]}` runs on Grace and prints "N people near lab".
+3. The same plan is rejected for Linus ("does not have skill 'count_people'").
+4. Listing an unregistered skill in JSON (`"teleport"`) is rejected. **JSON alone cannot create a skill**; the C# registration is required.
+
+Where to call `Register` in your project: at startup, before the first plan. For example, add it to
+`SkillRegistry.RegisterBuiltIns()`, or call it from a `[RuntimeInitializeOnLoadMethod]` in your own script.
+Run the example: `Unity.exe -batchmode -projectPath . -runTests -testPlatform PlayMode -testFilter AgentWorld.Tests.CustomSkillExampleTests`.
 
 ### Creating a new skill (steps)
 
