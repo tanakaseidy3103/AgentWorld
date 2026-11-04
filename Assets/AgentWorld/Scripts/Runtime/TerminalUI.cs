@@ -48,8 +48,10 @@ namespace AgentWorld
             var size = FontSize(Screen.height);
             if (size != styledFor) BuildStyles(size);
 
-            float w = Mathf.Min(Screen.width * 0.9f, size * 60f), h = Screen.height * 0.82f;
-            var rect = new Rect((Screen.width - w) / 2f, (Screen.height - h) / 2f, w, h);
+            // Compact console docked bottom-left so the world and Mission Control stay visible.
+            float margin = size * 0.5f;
+            float w = Mathf.Min(Screen.width - MissionPanel.ReservedWidth - margin * 3f, size * 52f), h = Screen.height * 0.42f;
+            var rect = new Rect(margin, Screen.height - h - margin, w, h);
             GUILayout.BeginArea(rect, panel);
             GUILayout.Label($"Terminal - {Current.id}    [Enter] enviar   [Esc] fechar", title);
             scroll = GUILayout.BeginScrollView(scroll, GUIStyle.none, GUI.skin.verticalScrollbar);
@@ -69,7 +71,7 @@ namespace AgentWorld
         {
             styledFor = size;
             var pad = size / 2;
-            panel = new GUIStyle { normal = { background = Solid(new Color(0.05f, 0.07f, 0.06f, 0.96f)) }, padding = new RectOffset(pad, pad, pad, pad) };
+            panel = new GUIStyle { normal = { background = Solid(new Color(0.05f, 0.07f, 0.06f, 0.9f)) }, padding = new RectOffset(pad, pad, pad, pad) };
             title = new GUIStyle { fontSize = size, fontStyle = FontStyle.Bold, normal = { textColor = new Color(1f, 0.85f, 0.35f) }, margin = new RectOffset(0, 0, 0, pad) };
             text = new GUIStyle { fontSize = size, wordWrap = true, normal = { textColor = new Color(0.75f, 1f, 0.8f) } };
             prompt = new GUIStyle(text) { fontStyle = FontStyle.Bold, wordWrap = false, padding = new RectOffset(0, pad / 2, pad / 2, 0) };

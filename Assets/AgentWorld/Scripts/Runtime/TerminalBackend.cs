@@ -31,7 +31,7 @@ agentes IA (Llama local via Ollama):
   mission <objetivo>         missão multi-agente: Ada delega, Grace explora, Linus constrói
                              ex: mission build a small village near the lake
   mission status | mission stop
-[Tab] mostra/esconde o painel Mission Control
+[Tab] mostra/esconde o painel Mission Control   [M] barra de missão
 [Llama] = decisão do modelo   [Unity] = ação executada pelo jogo";
 
         public string Execute(string input, Computer host)
@@ -123,7 +123,7 @@ agentes IA (Llama local via Ollama):
             catch (Exception e) { output("Ollama: indisponível - " + e.Message); }
         }
 
-        static string Mission(string arg, Computer host)
+        internal static string Mission(string arg, Computer host)
         {
             var m = MissionControl.State;
             switch (arg.ToLowerInvariant())
@@ -146,6 +146,13 @@ agentes IA (Llama local via Ollama):
         static string Or(string s) => string.IsNullOrEmpty(s) ? "-" : s;
 
         public static Action<string> Print(Computer host) => line => { if (host) host.log.Add(line); };
+    }
+
+    /// Mission bar (M): every line is a natural-language mission; 'status' / 'stop' control the current one.
+    public class MissionBackend : ITerminalBackend
+    {
+        public string Execute(string input, Computer host) =>
+            input.ToLowerInvariant() == "clear" ? LocalShellBackend.Clear : LocalShellBackend.Mission(input, host);
     }
 
     /// Chat window behind an AI NPC: every line goes to the LLM as conversation.

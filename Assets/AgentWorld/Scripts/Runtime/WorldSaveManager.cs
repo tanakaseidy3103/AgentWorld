@@ -80,7 +80,7 @@ namespace AgentWorld
 
         void OnGUI()
         {
-            GUI.Label(new Rect(10, 8, 800, 22), "WASD mover | E interagir (PC = terminal, NPC = conversa IA) | Tab painel | F5 salvar | F9 carregar | terminal: help");
+            GUI.Label(new Rect(10, 8, 800, 22), "WASD mover | E interagir (PC = terminal, NPC = conversa IA) | M missão | Tab painel | F5 salvar | F9 carregar | terminal: help");
             if (Time.time < toastUntil) GUI.Box(new Rect(Screen.width - 210, 10, 200, 26), toast);
         }
     }

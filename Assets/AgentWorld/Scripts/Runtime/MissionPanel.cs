@@ -25,12 +25,36 @@ namespace AgentWorld
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void Ensure()
         {
-            if (FindAnyObjectByType<MissionPanel>() == null && FindAnyObjectByType<TerminalUI>() is TerminalUI ui) ui.gameObject.AddComponent<MissionPanel>();
+            if (!(FindAnyObjectByType<TerminalUI>() is TerminalUI ui)) return;
+            if (FindAnyObjectByType<MissionPanel>() == null) ui.gameObject.AddComponent<MissionPanel>();
+            if (FindAnyObjectByType<InspectionMarkers>() == null) ui.gameObject.AddComponent<InspectionMarkers>();
         }
+
+        /// Screen width the panel occupies on the right (0 when hidden); the terminal docks beside it.
+        public static float ReservedWidth { get; private set; }
+
+        Computer console;
+
+        /// Natural-language mission bar (M): a terminal whose every line is a mission for the team.
+        public Computer MissionConsole()
+        {
+            if (console) return console;
+            var go = new GameObject("MissionConsole");
+            go.transform.SetParent(transform, false);
+            console = go.AddComponent<Computer>();
+            console.id = "missão para a equipe";
+            console.Backend = new MissionBackend();
+            console.log.Add("Descreva uma missão em linguagem natural (ex: build a small village near the lake).");
+            console.log.Add("A equipe sabe explorar e construir casas e fazendas. 'status' ou 'stop' controlam a missão atual.");
+            return console;
+        }
+
+        void OnDisable() => ReservedWidth = 0;
 
         void Update()
         {
             if (!TerminalUI.IsOpen && Input.GetKeyDown(KeyCode.Tab)) visible = !visible;
+            if (!TerminalUI.IsOpen && Input.GetKeyDown(KeyCode.M)) TerminalUI.Open(MissionConsole());
             if (!pinging && Time.unscaledTime >= nextPing) Ping();
         }
 
@@ -52,7 +76,7 @@ namespace AgentWorld
 
         void OnGUI()
         {
-            if (!visible || TerminalUI.IsOpen) return;
+            if (!visible) { ReservedWidth = 0; return; }
             var size = Mathf.Max(14, Mathf.RoundToInt(TerminalUI.FontSize(Screen.height) * 0.8f));
             if (size != styledFor)
             {
@@ -65,6 +89,7 @@ namespace AgentWorld
             }
 
             float w = Mathf.Min(Screen.width * 0.34f, size * 30f), h = Screen.height - size * 3f;
+            ReservedWidth = w + size * 0.5f;
             GUILayout.BeginArea(new Rect(Screen.width - w - size * 0.5f, size * 2f, w, h), box);
             scroll = GUILayout.BeginScrollView(scroll, GUIStyle.none, GUIStyle.none);
             GUILayout.Label(Body(size * 4 / 5), text);
@@ -76,12 +101,12 @@ namespace AgentWorld
         {
             var m = MissionControl.State;
             var sb = new StringBuilder();
-            sb.Append($"<b><color=#ffd95a>MISSION CONTROL</color></b>  <size={small}>[Tab]</size>\n");
+            sb.Append($"<b><color=#ffd95a>MISSION CONTROL</color></b>  <size={small}>[M] nova missão · [Tab] esconder</size>\n");
             sb.Append($"Meta Llama (Ollama): <color={(Connected ? "#7dff9a" : "#ff7a7a")}>{Ollama}</color>\n\n");
 
             sb.Append(m.status == "None"
-                ? $"<b>Missão:</b> nenhuma\n<size={small}>terminal: mission build a small village near the lake</size>\n"
-                : $"<b>Missão:</b> {Esc(m.objective)}\n<b>Estado:</b> <color={StatusColor(m.status)}>{m.status}</color>  casas {m.housesBuilt}/{m.housesWanted}  {Esc(m.result)}\n");
+                ? $"<b>Missão:</b> nenhuma\n<size={small}>aperte M e digite: build a small village near the lake</size>\n"
+                : $"<b>Missão:</b> {Esc(m.objective)}\n<b>Estado:</b> <color={StatusColor(m.status)}>{m.status}</color>  casas {m.housesBuilt}/{m.housesWanted}{(m.farmsWanted > 0 ? $"  fazenda {m.farmsBuilt}/{m.farmsWanted}" : "")}\n{Esc(m.result)}\n");
 
             sb.Append("\n<b>Agentes</b>\n");
             foreach (var n in AgentHub.Agents)
@@ -130,7 +155,7 @@ namespace AgentWorld
         {
             "Done" or "Completed" or "Succeeded" => "#7dff9a",
             "Failed" or "Cancelled" or "Interrupted" => "#ff7a7a",
-            "Partial" => "#ffb35a",
+            "Partial" or "Unsupported" => "#ffb35a",
             "Idle" or "None" or "Pending" => "#bbbbbb",
             _ => "#ffd95a",
         };

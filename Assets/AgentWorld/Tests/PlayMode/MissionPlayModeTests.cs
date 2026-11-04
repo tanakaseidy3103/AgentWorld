@@ -84,6 +84,93 @@ namespace AgentWorld.Tests
         }
 
         [UnityTest]
+        public IEnumerator Mission_UnsupportedRequest_IsExplainedHonestly()
+        {
+            var llm = new MockLlm("{\"feasible\":\"no\",\"explore\":[],\"houses\":0,\"message\":\"We can only build houses and farms, not castles.\"}");
+            AgentHub.Llm = llm;
+            Assert.IsTrue(MissionControl.Start("build a giant castle on the lake", null, out _));
+            yield return WaitMission();
+            Assert.AreEqual("Unsupported", MissionControl.State.status);
+            StringAssert.Contains("not castles", MissionControl.State.result);
+            Assert.AreEqual(1, llm.Calls);
+            Assert.IsEmpty(MissionControl.State.tasks, "nothing was delegated");
+            Assert.IsEmpty(structures.Structures);
+        }
+
+        [UnityTest]
+        public IEnumerator Mission_VillageWithFarm_BuildsWalkableFarm_AndPersists()
+        {
+            AgentHub.Llm = new MockLlm(
+                "{\"feasible\":\"yes\",\"explore\":[\"lake\",\"east_field\"],\"houses\":1,\"farms\":1,\"message\":\"Go!\"}",
+                "{\"build_at\":[\"lake\"],\"farm_at\":\"east_field\",\"reason\":\"Farm on open grass.\"}");
+            Assert.IsTrue(MissionControl.Start("build a village with a farm", null, out _));
+            yield return WaitMission();
+            var m = MissionControl.State;
+            Assert.AreEqual("Succeeded", m.status, Log);
+            Assert.AreEqual(1, m.farmsBuilt);
+            var farm = structures.Structures.Single(s => s.type == "farm");
+            Assert.IsTrue(farm.GetComponent<Collider2D>().isTrigger, "farms must not trap anyone");
+            Assert.Less(Vector2.Distance(farm.transform.position, Landmark.Find("east_field").transform.position), 10f);
+            Assert.IsFalse(structures.IsFree(farm.transform.position), "nothing else can be built on the farm");
+
+            var mgr = Object.FindAnyObjectByType<WorldSaveManager>();
+            mgr.Save();
+            structures.Restore(null);
+            yield return null;
+            Assert.IsTrue(mgr.Load());
+            yield return null;
+            Assert.AreEqual(1, structures.Structures.Count(s => s.type == "farm"));
+            Assert.AreEqual(1, structures.Structures.Count(s => s.type == "house"));
+        }
+
+        [UnityTest]
+        public IEnumerator Mission_FarmOnUnexploredSite_IsRejected()
+        {
+            var llm = new MockLlm(
+                "{\"feasible\":\"yes\",\"explore\":[\"lake\"],\"houses\":1,\"farms\":1,\"message\":\"Go\"}",
+                "{\"build_at\":[\"lake\"],\"farm_at\":\"north_meadow\",\"reason\":\"x\"}");
+            AgentHub.Llm = llm;
+            Assert.IsTrue(MissionControl.Start("village", null, out _));
+            yield return WaitMission();
+            Assert.AreEqual("Failed", MissionControl.State.status);
+            StringAssert.Contains("'north_meadow' não foi explorado", Log);
+            Assert.IsEmpty(structures.Structures);
+        }
+
+        [UnityTest]
+        public IEnumerator MissionBar_StartsMissionFromNaturalLanguage()
+        {
+            AgentHub.Llm = new MockLlm(Delegation("plaza", 1), Choice("plaza"));
+            var panel = Object.FindAnyObjectByType<MissionPanel>();
+            var bar = panel.MissionConsole();
+            bar.Submit("please build one house at the plaza");
+            StringAssert.Contains("missão iniciada", bar.log.Last());
+            yield return WaitMission();
+            Assert.AreEqual("Succeeded", MissionControl.State.status);
+            bar.Submit("status");
+            StringAssert.Contains("Succeeded", bar.log.Last());
+        }
+
+        [UnityTest]
+        public IEnumerator Agents_ShowTaskIndicators()
+        {
+            AgentHub.Llm = new MockLlm(Delegation("plaza", 1), Choice("plaza")) { Delay = 0.3f };
+            Assert.IsTrue(MissionControl.Start("one house at the plaza", null, out _));
+            var seen = new System.Collections.Generic.HashSet<string>();
+            while (MissionControl.Running)
+            {
+                foreach (var n in AgentHub.Agents)
+                {
+                    var icon = n.transform.Find("TaskIcon")?.GetComponent<SpriteRenderer>();
+                    if (icon && icon.enabled && icon.sprite) seen.Add(n.agentRole + ":" + icon.sprite.name);
+                }
+                yield return null;
+            }
+            CollectionAssert.IsSubsetOf(new[] { "assistant:think", "explorer:scout", "builder:build" }, seen.ToList(), string.Join(", ", seen));
+            Assert.IsNotNull(GameObject.Find("Flag_plaza"), "Grace marks inspected places");
+        }
+
+        [UnityTest]
         public IEnumerator Mission_InvalidLocation_RetriesOnce_ThenFails()
         {
             var llm = new MockLlm(Delegation("volcano", 2));
@@ -159,6 +246,17 @@ namespace AgentWorld.Tests
             pc.Submit("mission status");
             StringAssert.Contains("Succeeded", pc.log.Last());
             StringAssert.Contains("plaza", pc.log.Last());
+        }
+
+        /// Opt-in: does real Llama refuse something the team cannot do? Logs the outcome either way.
+        [UnityTest, Explicit("needs Ollama running with the configured Llama model")]
+        public IEnumerator LiveLlama_UnsupportedMission()
+        {
+            AgentHub.Llm = new OllamaClient();
+            Assert.IsTrue(MissionControl.Start("Build a giant stone castle with towers on top of the lake", l => Debug.Log("[live] " + l), out var err), err);
+            yield return WaitMission(400f);
+            Debug.Log($"[live] RESULT {MissionControl.State.status}: {MissionControl.State.result}");
+            Assert.AreEqual("Unsupported", MissionControl.State.status, Log);
         }
 
         /// Real Llama decisions end to end. Opt-in: -testFilter AgentWorld.Tests.MissionPlayModeTests.LiveLlama_VillageMission
