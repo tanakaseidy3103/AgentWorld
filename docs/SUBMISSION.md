@@ -54,11 +54,11 @@ Preparation (before recording):
 |---|---|---|
 | 0:00–0:20 | Title card, then the game running | "AI agents usually live in chat boxes. AgentWorld gives them a world, a body and teammates, all powered by Meta Llama 3.2 running locally." |
 | 0:20–0:40 | Walk with WASD past the lake and houses; Mission Control on the right shows *Meta Llama (Ollama): conectado · llama3.2* | "Three agents live here: Ada coordinates, Grace explores, Linus builds. Everything runs offline through Ollama." |
-| 0:40–0:55 | Walk into the lab (top building), press **E** at a computer, type `mission build a small village near the lake`, Enter, then **Esc** | "I give the team one mission in plain language." |
+| 0:40–0:55 | Press **M**, type `Build a small village with a farm near the lake`, Enter, then **Esc** | "I give the team one mission in plain language." |
 | 0:55–1:15 | Panel: Ada *Thinking*, then the **Decisões do Llama** line with the explore list and message | "Ada asks Llama to break it down: which places Grace should scout, and how many houses." |
-| 1:15–1:45 | Grace walking to each place; *Memória compartilhada* fills with free-site counts | "Grace inspects each place. Unity measures the real free land and Grace writes it to shared memory. These are facts, not guesses." |
-| 1:45–2:25 | Second Llama decision (build_at + reason); Linus walks over; houses rise; tasks get ✔ | "Ada reads the shared memory and Llama picks the sites. Unity checks every choice: the place must exist, must have been explored and must have room. Then Linus builds." |
-| 2:25–2:40 | If the panel shows a *rejeitada* or *recuperação* line, point at it. Otherwise open the terminal and run `mission status` | "When the model is wrong, the validator rejects it and Llama gets one retry. If land runs out, Unity recovers. Results are reported honestly: success, partial or failure." |
+| 1:15–1:45 | Grace (magnifier icon) walking to each place, planting flags labelled "N livres"; *Memória compartilhada* fills with free-site counts | "Grace inspects each place. Unity measures the real free land and Grace writes it to shared memory. These are facts, not guesses." |
+| 1:45–2:25 | Second Llama decision (houses + farm sites, reason); Linus (hammer icon) walks over; scaffold and dust, the house rises, then the farm; tasks get ✔ | "Ada reads the shared memory and Llama picks the sites. Unity checks every choice: the place must exist, must have been explored and must have room. Then Linus builds." |
+| 2:25–2:40 | Press **M**, type `Build a giant stone castle on top of the lake`. Ada refuses with Llama's explanation; status *Unsupported* | "And when we ask for something the team can't do, Ada says so instead of pretending. Every model decision is validated before anything moves." |
 | 2:40–2:50 | Press F5; stop and restart Play (or F9); the village is still there | "The world, the agents' memory and the mission persist." |
 | 2:50–3:00 | Wide shot of the village | "Local open-weight Llama agents that collaborate safely. This is AgentWorld." |
 

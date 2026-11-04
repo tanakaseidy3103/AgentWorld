@@ -8,7 +8,10 @@ for example *"Build a small village near the lake"*, and a team of agents carrie
 1. **Ada** (coordinator) asks **Meta Llama 3.2** to break the mission into tasks: which places to scout and how many houses to build.
 2. **Grace** (explorer) walks to each place. Unity measures the real free building land there, and Grace writes a structured report to **shared memory**.
 3. **Ada** asks Llama again, this time with Grace's reports, and picks the building sites.
-4. **Linus** (builder) walks to each site and builds the houses. If a site fills up, Unity recovers by trying another reported location.
+4. **Linus** (builder) walks to each site and builds the houses (and a farm, if Ada planned one). If a site fills up, Unity recovers by trying another reported location.
+
+If you ask for something the team can't do ("build a castle on the lake"), Ada says so through Llama, explains why,
+and nothing is delegated. The mission ends as *Unsupported* instead of pretending.
 5. The village stays in the world and is still there after you save and load.
 
 The model **makes the decisions**. Unity **validates every decision against the live world** and then
@@ -37,7 +40,7 @@ And it runs fully offline on a normal laptop, with no API key and nothing billed
 | Model | **Meta Llama 3.2 3B Instruct** (`llama3.2`, Q4_K_M, ~2 GB), open weights |
 | Runtime | **Ollama**, local HTTP API at `http://localhost:11434` (`/api/chat` with `format: "json"`) |
 | Not used | Meta Model API, cloud inference, paid APIs |
-| Llama decides | mission decomposition (where to scout, how many houses), site selection from shared memory, single-agent action plans, NPC dialogue in character |
+| Llama decides | whether a mission is feasible for the team, mission decomposition (where to scout, how many houses and farms), site selection from shared memory, single-agent action plans, NPC dialogue in character |
 | Unity decides | whether a location exists, how much free land it has, collision-free placement, pathing, retries/recovery, success/failure |
 
 Special prizes: this project uses **Llama 3.2**. It does **not** use Muse Glimmer or Muse Spark and makes
@@ -91,6 +94,7 @@ Windows build: menu **AgentWorld → Build Windows** writes `Builds/Windows/Agen
 |---|---|
 | WASD | walk |
 | E | at a lab computer: terminal · next to an agent: chat with it (Llama) |
+| M | mission bar: type a mission in plain language (no need to go to the lab) |
 | Tab | show/hide Mission Control |
 | F5 / F9 | save / load |
 | Enter / Esc | send / close |
@@ -98,7 +102,7 @@ Windows build: menu **AgentWorld → Build Windows** writes `Builds/Windows/Agen
 Terminal (computers inside the lab building at the top of the map):
 
 ```
-mission build a small village near the lake    # multi-agent mission
+mission build a small village near the lake    # multi-agent mission (or press M anywhere)
 mission status | mission stop
 agent builder build a house near the lake       # single agent, Llama writes the whole action plan
 agent explorer inspect the lake | agent assistant explain the lab
@@ -112,12 +116,16 @@ and Llama answers in the language of the request.
 
 ## What works (verified)
 
-- Multi-agent mission with real Llama decisions. 6 live runs on Llama 3.2 3B: 5 *Succeeded*, 1 *Partial*
+- Unsupported requests: "Build a giant stone castle with towers on top of the lake" was refused by Llama with an explanation in 2/2 live runs.
+- Second structure type, **farm** (walkable fenced field): placement validated, built by Linus, persisted. Live run: "Build a small village with a farm near the lake" gave 1 house + 1 farm, *Succeeded*.
+- Visible roles: a thinking/decision icon over Ada, a magnifier and survey flags ("N livres") for Grace, a swinging hammer and scaffold with dust for Linus.
+- Multi-agent mission with real Llama decisions. 10 live runs on Llama 3.2 3B: 9 *Succeeded*, 1 *Partial*
   (Ada chose fewer sites than she planned, and that was reported honestly). Around 60 s per mission.
 - Single-agent Llama plans (`agent builder ...`): 3/3 live runs built a house.
 - Validation rejects unknown actions, invented locations, unexplored or over-capacity sites, and builds by
   non-builders. A rejection triggers one retry that includes the error.
 - Construction: free-site search, no overlaps, roads and lab kept clear, nobody gets walled in, and a visible build animation.
+- Original procedural pixel art only: animated lake, shadows, two tree types, flowers, rocks, farm.
 - Persistence (save v3): houses, agent memory, mission state and shared memory. v1/v2 saves still load.
 - Failure handling: Ollama offline, timeouts, cancellation (`mission stop`, `agent stop`), malformed JSON.
 - Mission Control panel and terminal scale with resolution, so text is readable at 1080p and above.
@@ -130,7 +138,7 @@ Unity.exe -batchmode -projectPath . -runTests -testPlatform EditMode -testResult
 Unity.exe -batchmode -projectPath . -runTests -testPlatform PlayMode -testResults TestResults-PlayMode.xml
 ```
 
-19 EditMode + 20 PlayMode tests use a **deterministic mock LLM**. They cover plan parsing and validation,
+19 EditMode + 25 PlayMode tests use a **deterministic mock LLM**. They cover plan parsing and validation,
 unsafe actions, state transitions, build placement, mission delegation, invalid locations, unexplored
 sites, site-full recovery, cancellation, timeouts, Ollama offline, save/load and terminal commands.
 Live-model tests are opt-in (they need Ollama running):
@@ -149,7 +157,8 @@ All art is generated procedurally by our own `WorldBuilder.cs`; there are no thi
 
 ## Known limitations
 
-- One structure type (house); at most 3 houses per mission and 12 agent-built structures overall.
+- Two structure types (house, farm); at most 3 houses + 1 farm per mission and 12 agent-built structures overall.
+- Llama 3.2 3B rarely adds a farm unless the mission mentions one, and doesn't always build at the place named in the mission (it picks among the scouted sites).
 - No real pathfinding: straight lines, a sidestep when stuck, and a route through the lab door.
 - A 3B model sometimes picks fewer sites than planned (Partial) or needs a validator retry.
 - Missions run their steps one after another and are not resumed after loading a save (they show as *Interrupted*).

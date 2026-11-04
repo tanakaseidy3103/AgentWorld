@@ -42,3 +42,16 @@ Fallback: `feature/mvp2-llama-agents` (single-agent build demo, last commit `48a
 | Panel readable, houses off roads | Screenshots from a live mission at 3840x2160 (the editor ignored the 1080p resize, so 1080p was not seen directly) |
 | Windows build | `WorldBuilder.BuildWindows` in batchmode: "Windows build Succeeded" |
 | Not verified | restart persistence across processes, the .exe actually running, 1080p on-screen look |
+
+## Demo polish (branch `feature/demo-polish`, Nov 4 evening)
+
+Fallback: `feature/final-sprint` (commit `e99cac5`).
+
+- [x] Procedural visuals: 3-frame lake, shadows, pine trees, flowers/tufts/rocks, scaffold + dust during construction
+- [x] Task icons over agents (think/decide, scout, hammer, done/fail); Grace's survey flags with free-site labels
+- [x] Mission bar (M) using natural language; terminal docked bottom-left beside Mission Control; all commands kept
+- [x] Honest refusal: Ada returns `feasible: no` + explanation → mission *Unsupported* (live 2/2 for the castle request)
+- [x] New structure: farm (trigger collider = walkable, blocks other construction, saved/loaded) + tests
+- [x] Tests: EditMode 19/19, PlayMode 25/25 (copy of the project, editor was open); Windows build succeeded again
+- [x] Live: village mission 3/3 Succeeded (houses only), farm mission 1/1 Succeeded (1 house + 1 farm)
+- [ ] Manual: in the open editor, run **AgentWorld → Rebuild World** so the new art and farm prefab exist (old scene has no farm prefab; farm builds fail there with "estrutura indisponível")
