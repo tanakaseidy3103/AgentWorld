@@ -53,7 +53,14 @@ namespace AgentWorld
         public float wanderRadius = 2.5f;
         [TextArea] public string[] lines;
 
-        public IAgentBrain Brain { get; set; }
+        // Created on demand: a domain reload during Play mode (scripts recompiled while playing) wipes
+        // non-serialized fields without calling Awake again, which used to leave Brain null.
+        IAgentBrain brain;
+        public IAgentBrain Brain
+        {
+            get => brain ??= string.IsNullOrEmpty(agentRole) ? new WanderBrain() : new LlamaAgentBrain(this);
+            set => brain = value;
+        }
         public Vector2 Home { get; set; }
         public string Speech { get; private set; }
 
@@ -62,7 +69,7 @@ namespace AgentWorld
         float stuckTimer;
         Computer chat;
 
-        public string Prompt => "Falar com " + displayName;
+        public string Prompt => "Talk to " + displayName;
         public LlamaAgentBrain Ai => Brain as LlamaAgentBrain;
 
         void Awake()
@@ -71,7 +78,7 @@ namespace AgentWorld
             rb.gravityScale = 0f;
             rb.freezeRotation = true;
             Home = transform.position;
-            Brain ??= string.IsNullOrEmpty(agentRole) ? new WanderBrain() : new LlamaAgentBrain(this);
+            _ = Brain;
             if (Ai != null && !GetComponent<AgentIndicator>()) gameObject.AddComponent<AgentIndicator>();
         }
 
@@ -107,7 +114,7 @@ namespace AgentWorld
             chat = go.AddComponent<Computer>();
             chat.id = "conversa com " + displayName;
             chat.Backend = new NpcChatBackend(this);
-            chat.log.Add($"Você está falando com {displayName} ({agentRole}), movido por Llama local. Esc fecha.");
+            chat.log.Add($"You are talking to {displayName} ({RoleTitle}), powered by local Llama. Esc closes.");
             return chat;
         }
 
@@ -161,10 +168,10 @@ namespace AgentWorld
                     case AgentStatus.Planning: return "Planning";
                     case AgentStatus.Moving: return agentRole == "explorer" ? "Exploring" : "Moving";
                     case AgentStatus.Acting:
-                        if (ai.Detail.StartsWith("construindo")) return "Building";
-                        if (ai.Detail.StartsWith("inspecionando")) return "Exploring";
-                        if (ai.Detail.StartsWith("falando")) return "Talking";
-                        if (ai.Detail.StartsWith("esperando")) return "Waiting";
+                        if (ai.Detail.StartsWith("building")) return "Building";
+                        if (ai.Detail.StartsWith("inspecting")) return "Exploring";
+                        if (ai.Detail.StartsWith("talking")) return "Talking";
+                        if (ai.Detail.StartsWith("waiting")) return "Waiting";
                         return "Acting";
                     case AgentStatus.Failed: return "Failed";
                     case AgentStatus.Cancelled: return "Cancelled";

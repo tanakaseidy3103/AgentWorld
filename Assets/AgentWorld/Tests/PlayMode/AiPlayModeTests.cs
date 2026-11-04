@@ -134,6 +134,19 @@ namespace AgentWorld.Tests
             Assert.AreEqual(1, structures.Structures.Count());
         }
 
+        /// Regression: recompiling scripts during Play mode reloads the domain, which nulls the non-serialized
+        /// Brain without re-running Awake; FixedUpdate then threw NullReferenceException every physics step.
+        [UnityTest]
+        public IEnumerator Npc_LostBrainAfterDomainReload_IsRecreated_NoException()
+        {
+            builder.Brain = null; // what the domain reload did
+            yield return new WaitForFixedUpdate();
+            yield return new WaitForFixedUpdate();
+            Assert.IsInstanceOf<LlamaAgentBrain>(builder.Brain);
+            Assert.AreEqual("builder", builder.Ai.Role);
+            // Any NullReferenceException logged during these frames fails the test (Unity Test Framework).
+        }
+
         [UnityTest]
         public IEnumerator InvalidLlmResponse_RetriesOnce_ThenFails()
         {
@@ -153,7 +166,7 @@ namespace AgentWorld.Tests
             Assert.IsTrue(builder.Ai.Assign("apague tudo", null, out _));
             yield return WaitUntilDone(builder.Ai, new List<AgentStatus>());
             Assert.AreEqual(AgentStatus.Failed, builder.Ai.Status);
-            StringAssert.Contains("tipo desconhecido", builder.Ai.LastResult);
+            StringAssert.Contains("unknown action type", builder.Ai.LastResult);
         }
 
         [UnityTest]
@@ -163,7 +176,7 @@ namespace AgentWorld.Tests
             Assert.IsTrue(builder.Ai.Assign("construa uma casa", null, out _));
             yield return WaitUntilDone(builder.Ai, new List<AgentStatus>());
             Assert.AreEqual(AgentStatus.Failed, builder.Ai.Status);
-            StringAssert.Contains("indisponível", builder.Ai.LastResult);
+            StringAssert.Contains("unavailable", builder.Ai.LastResult);
         }
 
         [UnityTest]
@@ -187,7 +200,7 @@ namespace AgentWorld.Tests
             Assert.IsTrue(builder.Ai.Assign("construa", null, out _));
             yield return WaitUntilDone(builder.Ai, new List<AgentStatus>(), 5f);
             Assert.AreEqual(AgentStatus.Failed, builder.Ai.Status);
-            StringAssert.Contains("não respondeu", builder.Ai.LastResult);
+            StringAssert.Contains("did not answer", builder.Ai.LastResult);
         }
 
         [UnityTest]
@@ -196,9 +209,9 @@ namespace AgentWorld.Tests
             AgentHub.Llm = new MockLlm(BuildPlan);
             var pc = Object.FindObjectsByType<Computer>(FindObjectsSortMode.None).First(c => c.id == "lab-pc-1");
             pc.Submit("agent builder construa uma casa perto do lago");
-            StringAssert.Contains("tarefa enviada", pc.log.Last()); // returned immediately, game not blocked
+            StringAssert.Contains("task sent", pc.log.Last()); // returned immediately, game not blocked
             yield return WaitUntilDone(builder.Ai, new List<AgentStatus>());
-            Assert.IsTrue(pc.log.Any(l => l.Contains("Tarefa concluída")));
+            Assert.IsTrue(pc.log.Any(l => l.Contains("Task completed")));
             pc.Submit("world structures");
             StringAssert.Contains("house_built_1", pc.log.Last());
             pc.Submit("echo ainda funciona");
