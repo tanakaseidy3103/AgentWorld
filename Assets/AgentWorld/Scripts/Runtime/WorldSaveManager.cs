@@ -39,6 +39,7 @@ namespace AgentWorld
             }
             var builder = FindAnyObjectByType<StructureBuilder>();
             if (builder) s.structures = builder.Capture();
+            s.mission = MissionControl.Capture();
             foreach (var c in FindObjectsByType<Computer>(FindObjectsSortMode.None))
                 s.computers.Add(new ComputerState { id = c.id, log = new List<string>(c.log) });
             return s;
@@ -57,6 +58,7 @@ namespace AgentWorld
             }
             var builder = FindAnyObjectByType<StructureBuilder>();
             if (builder) builder.Restore(s.structures);
+            MissionControl.Restore(s.mission);
             foreach (var c in FindObjectsByType<Computer>(FindObjectsSortMode.None))
             {
                 var e = s.computers.Find(x => x.id == c.id);
@@ -78,7 +80,7 @@ namespace AgentWorld
 
         void OnGUI()
         {
-            GUI.Label(new Rect(10, 8, 800, 22), "WASD mover | E interagir (PC = terminal, NPC = conversa IA) | F5 salvar | F9 carregar | terminal: help");
+            GUI.Label(new Rect(10, 8, 800, 22), "WASD mover | E interagir (PC = terminal, NPC = conversa IA) | Tab painel | F5 salvar | F9 carregar | terminal: help");
             if (Time.time < toastUntil) GUI.Box(new Rect(Screen.width - 210, 10, 200, 26), toast);
         }
     }

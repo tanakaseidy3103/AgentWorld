@@ -28,6 +28,10 @@ agentes IA (Llama local via Ollama):
   agent stop <id|papel>      cancela a tarefa
   world status | world structures
   ai status                  testa conexão com o Ollama
+  mission <objetivo>         missão multi-agente: Ada delega, Grace explora, Linus constrói
+                             ex: mission build a small village near the lake
+  mission status | mission stop
+[Tab] mostra/esconde o painel Mission Control
 [Llama] = decisão do modelo   [Unity] = ação executada pelo jogo";
 
         public string Execute(string input, Computer host)
@@ -48,6 +52,7 @@ agentes IA (Llama local via Ollama):
                         : string.Join("\n", npcs.OrderBy(n => n.id).Select(n => $"{n.displayName} ({n.role}) @ {((Vector2)n.transform.position).ToString("F1")}"));
                 case "agent": return Agent(arg, host);
                 case "world": return World(arg);
+                case "mission": return Mission(arg, host);
                 case "ai": return arg == "status" ? AiStatus(host) : "uso: ai status";
                 default: return $"comando desconhecido: {parts[0]} (digite help)";
             }
@@ -116,6 +121,26 @@ agentes IA (Llama local via Ollama):
                 output($"Agentes: {AgentHub.Agents.Count()}");
             }
             catch (Exception e) { output("Ollama: indisponível - " + e.Message); }
+        }
+
+        static string Mission(string arg, Computer host)
+        {
+            var m = MissionControl.State;
+            switch (arg.ToLowerInvariant())
+            {
+                case "": return "uso: mission <objetivo> | mission status | mission stop";
+                case "stop":
+                    if (!MissionControl.Running) return "nenhuma missão em andamento";
+                    MissionControl.Stop();
+                    return "cancelando missão...";
+                case "status":
+                    if (m.status == "None") return "nenhuma missão ainda";
+                    return $"missão: {m.objective}\nestado: {m.status} {m.result}\ncasas: {m.housesBuilt}/{m.housesWanted}\n" +
+                           string.Join("\n", m.tasks.Select(t => $"  #{t.id} {t.agent}: {t.description} [{t.status}]")) +
+                           (m.sharedMemory.Count == 0 ? "" : "\nmemória compartilhada:\n" + string.Join("\n", m.sharedMemory.Select(r => $"  {r.location}: {r.freeSites} terrenos livres ({r.reportedBy})")));
+                default:
+                    return MissionControl.Start(arg, Print(host), out var error) ? $"[Unity] missão iniciada: {arg}" : "erro: " + error;
+            }
         }
 
         static string Or(string s) => string.IsNullOrEmpty(s) ? "-" : s;

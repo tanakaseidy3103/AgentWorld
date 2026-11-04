@@ -45,6 +45,7 @@ namespace AgentWorld
     {
         public const int MemoryCap = 12, ChatCap = 6;
         public const float MinSecondsBetweenCalls = 2f;
+        const float WorkSpeed = 1.8f; // agents on a task walk faster than idle wandering
 
         static readonly Dictionary<string, string> Personalities = new Dictionary<string, string>
         {
@@ -81,9 +82,9 @@ namespace AgentWorld
             if (detour is Vector2 d)
             {
                 if (Vector2.Distance(pos, d) < 0.2f || Time.time > detourUntil) detour = null;
-                else return (d - pos).normalized;
+                else return (d - pos).normalized * WorkSpeed;
             }
-            if (moveTarget is Vector2 t && Vector2.Distance(pos, t) > 0.3f) return (t - pos).normalized;
+            if (moveTarget is Vector2 t && Vector2.Distance(pos, t) > 0.3f) return (t - pos).normalized * WorkSpeed;
             return Vector2.zero;
         }
 
@@ -116,35 +117,53 @@ namespace AgentWorld
 
         public void Stop() => cts?.Cancel();
 
-        async Task Run(string goal, Action<string> output, CancellationToken ct)
+        /// Runs already-validated actions for a mission (no LLM call). False if busy, failed or cancelled.
+        public Task<bool> Perform(string goal, List<AgentAction> actions, Action<string> output, CancellationToken ct)
+        {
+            if (Busy) return Task.FromResult(false);
+            cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            return Guarded(goal, output ?? (_ => { }), say => ExecuteAll(actions, output ?? (_ => { }), say, cts.Token));
+        }
+
+        Task Run(string goal, Action<string> output, CancellationToken ct) => Guarded(goal, output, async say =>
+        {
+            Set(AgentStatus.Thinking, "consultando " + AgentHub.Llm.Model);
+            say($"Pensando... (Llama: {AgentHub.Llm.Model})");
+            var plan = await MakePlan(goal, ct);
+            Set(AgentStatus.Planning, plan.goal);
+            output($"[Llama] plano: {string.Join(" -> ", plan.actions)}");
+            await ExecuteAll(plan.actions, output, say, ct);
+        });
+
+        async Task ExecuteAll(List<AgentAction> actions, Action<string> output, Action<string> say, CancellationToken ct)
+        {
+            for (var i = 0; i < actions.Count; i++)
+            {
+                output($"[Unity] {i + 1}/{actions.Count} {actions[i]}");
+                await Execute(actions[i], say, ct);
+            }
+        }
+
+        /// Shared status/memory bookkeeping around a task body; never throws.
+        async Task<bool> Guarded(string goal, Action<string> output, Func<Action<string>, Task> body)
         {
             Goal = goal;
             void Say(string line) { output($"[{Name}] {line}"); }
             try
             {
-                Set(AgentStatus.Thinking, "consultando " + AgentHub.Llm.Model);
-                Say($"Pensando... (Llama: {AgentHub.Llm.Model})");
-                var plan = await MakePlan(goal, ct);
-
-                Set(AgentStatus.Planning, plan.goal);
-                output($"[Llama] plano: {string.Join(" -> ", plan.actions)}");
-                for (var i = 0; i < plan.actions.Count; i++)
-                {
-                    var act = plan.actions[i];
-                    output($"[Unity] {i + 1}/{plan.actions.Count} {act}");
-                    await Execute(act, Say, ct);
-                }
-
+                await body(Say);
                 LastResult = "concluído: " + goal;
                 Remember($"Completed task '{goal}'");
                 Set(AgentStatus.Completed, "");
                 Say("Tarefa concluída.");
+                return true;
             }
             catch (OperationCanceledException)
             {
                 LastResult = "cancelado: " + goal;
                 Set(AgentStatus.Cancelled, "");
                 Say("Tarefa cancelada.");
+                return false;
             }
             catch (Exception e)
             {
@@ -152,6 +171,7 @@ namespace AgentWorld
                 Remember($"Failed task '{goal}': {e.Message}");
                 Set(AgentStatus.Failed, e.Message);
                 Say("Falhou: " + e.Message);
+                return false;
             }
             finally
             {
@@ -179,7 +199,7 @@ namespace AgentWorld
         }
 
         /// Main-thread timeout: cancels the request if the model takes too long.
-        async Task<T> WithTimeout<T>(Func<CancellationToken, Task<T>> call, CancellationToken ct)
+        public static async Task<T> WithTimeout<T>(Func<CancellationToken, Task<T>> call, CancellationToken ct)
         {
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
             var task = call(linked.Token);
@@ -338,7 +358,10 @@ You cannot act during chat. If the player wants something done, tell them to typ
 
         void Set(AgentStatus s, string detail) { Status = s; Detail = detail ?? ""; }
 
-        void Remember(string fact) => AddCapped(Memory, fact, MemoryCap);
+        /// Lets a mission show what an idle agent is doing (e.g. Ada thinking about the plan).
+        public void Show(AgentStatus s, string detail) { if (!Busy) Set(s, detail); }
+
+        public void Remember(string fact) => AddCapped(Memory, fact, MemoryCap);
 
         static void AddCapped(List<string> list, string item, int cap)
         {

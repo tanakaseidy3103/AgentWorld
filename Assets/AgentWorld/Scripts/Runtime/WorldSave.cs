@@ -14,12 +14,13 @@ namespace AgentWorld
     public class WorldState
     {
         // v2 adds structures + agents; v1 saves load with both lists empty.
-        public int version = 2;
+        public int version = 3;
         public Vector2 player;
         public List<EntityState> npcs = new List<EntityState>();
         public List<ComputerState> computers = new List<ComputerState>();
         public List<StructureState> structures = new List<StructureState>();
         public List<AgentState> agents = new List<AgentState>();
+        public MissionState mission = new MissionState(); // v3
     }
 
     public static class SaveSystem
