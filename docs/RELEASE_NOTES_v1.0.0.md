@@ -1,5 +1,7 @@
 # AgentWorld v1.0.0 — Meta AI Developer Hackathon
 
+Released under the MIT License.
+
 An open-source visual laboratory for building, testing, and evaluating collaborative AI agents powered by Meta Llama.
 
 ## What's included
@@ -31,7 +33,6 @@ An open-source visual laboratory for building, testing, and evaluating collabora
 - `agents.json` configures the three existing agents; new characters and new skills require C# code.
 - One model is used for all agents. Llama 3.2 3B may pick sites other than the one named in the mission.
 - Movement uses straight lines with sidestepping, not full pathfinding.
-- A license hasn't been selected yet.
 
 ## Verification
 

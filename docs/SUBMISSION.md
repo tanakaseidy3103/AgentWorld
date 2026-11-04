@@ -109,7 +109,7 @@ is validated against the live world before it runs, and missions are evaluated w
 
 ## Owner checklist (actions only the repository owner should take)
 
-- [ ] Choose a license (MIT recommended) and add `LICENSE`
+- [x] License: MIT (`LICENSE`)
 - [ ] Push `feature/final-polish`, open a pull request into `main`, review it, and merge
 - [ ] Make the repository public and set `main` as the default branch
 - [ ] Create the GitHub release `v1.0.0` with `Builds/AgentWorld-Windows-x64.zip` (notes in `docs/RELEASE_NOTES_v1.0.0.md`)

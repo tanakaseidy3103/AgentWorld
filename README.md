@@ -232,4 +232,4 @@ art assets are used.
 
 ## License
 
-A license has not been selected yet.
+[MIT](LICENSE)
