@@ -153,11 +153,21 @@ namespace AgentWorld.EditorTools
             systems.AddComponent<WorldSaveManager>();
             systems.AddComponent<TerminalUI>();
             systems.AddComponent<StructureBuilder>().housePrefab = housePrefabs[0];
+            systems.AddComponent<MissionPanel>();
 
             EditorSceneManager.SaveScene(scene, ScenePath);
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
             AssetDatabase.SaveAssets();
             Debug.Log("AgentWorld: world built at " + ScenePath);
+        }
+
+        /// Windows standalone player into Builds/Windows. Batch: -executeMethod AgentWorld.EditorTools.WorldBuilder.BuildWindows
+        [MenuItem("AgentWorld/Build Windows")]
+        public static void BuildWindows()
+        {
+            var report = BuildPipeline.BuildPlayer(new[] { ScenePath }, "Builds/Windows/AgentWorld.exe", BuildTarget.StandaloneWindows64, BuildOptions.None);
+            Debug.Log($"AgentWorld: Windows build {report.summary.result} ({report.summary.totalSize / 1048576} MB)");
+            if (report.summary.result != UnityEditor.Build.Reporting.BuildResult.Succeeded && Application.isBatchMode) EditorApplication.Exit(1);
         }
 
         // --- Helpers -------------------------------------------------------------
