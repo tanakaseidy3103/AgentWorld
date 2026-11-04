@@ -6,7 +6,8 @@ namespace AgentWorld
     public class TerminalUI : MonoBehaviour
     {
         public static Computer Current { get; private set; }
-        public static bool IsOpen => Current != null;
+        /// True while any text UI (terminal or Skill Library) has the keyboard; gameplay input is blocked.
+        public static bool IsOpen => Current != null || SkillLibraryPanel.Visible;
 
         static int openedFrame;
         string input = "";
@@ -32,7 +33,7 @@ namespace AgentWorld
         void OnGUI()
         {
             // Skip the frame that opened us so the E keystroke doesn't land in the text field.
-            if (!IsOpen || Time.frameCount == openedFrame) return;
+            if (Current == null || Time.frameCount == openedFrame) return;
 
             var e = Event.current;
             if (e.type == EventType.KeyDown && e.keyCode == KeyCode.Escape) { Close(); e.Use(); return; }

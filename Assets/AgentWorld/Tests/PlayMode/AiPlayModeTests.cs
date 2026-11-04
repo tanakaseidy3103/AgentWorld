@@ -97,7 +97,7 @@ namespace AgentWorld.Tests
             Assert.IsTrue(builder.Ai.Assign("construa uma casa perto do lago", output.Add, out var err), err);
 
             var seen = new List<AgentStatus>();
-            yield return WaitUntilDone(builder.Ai, seen);
+            yield return WaitUntilDone(builder.Ai, seen, 90f); // walking alone may take up to MoveTimeoutSeconds (40 s), plus building
 
             Assert.AreEqual(AgentStatus.Completed, builder.Ai.Status, string.Join("\n", output));
             foreach (var s in new[] { AgentStatus.Thinking, AgentStatus.Moving, AgentStatus.Acting, AgentStatus.Completed })

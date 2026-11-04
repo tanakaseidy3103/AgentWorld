@@ -36,6 +36,7 @@ namespace AgentWorld
 
         void OnGUI()
         {
+            if (SkillLibraryPanel.Visible) return; // the library is modal; world labels would draw over it
             var cam = Camera.main;
             if (cam == null || flags.Count == 0) return;
             var size = Mathf.Max(12, TerminalUI.FontSize(Screen.height) * 2 / 3);

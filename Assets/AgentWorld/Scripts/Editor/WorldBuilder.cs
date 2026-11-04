@@ -231,6 +231,18 @@ namespace AgentWorld.EditorTools
             if (report.summary.result != UnityEditor.Build.Reporting.BuildResult.Succeeded && Application.isBatchMode) EditorApplication.Exit(1);
         }
 
+        /// Regenerates the skill reference in docs/DEVELOPER_GUIDE.md from the live registry and agents.json.
+        /// Batch: -executeMethod AgentWorld.EditorTools.WorldBuilder.UpdateSkillDocs (an EditMode test fails if it is stale).
+        [MenuItem("AgentWorld/Update Skill Docs")]
+        public static void UpdateSkillDocs()
+        {
+            var path = System.IO.Path.Combine(Application.dataPath, "..", "docs", "DEVELOPER_GUIDE.md");
+            var updated = SkillLibrary.ReplaceDocs(System.IO.File.ReadAllText(path).Replace("\r\n", "\n"));
+            if (updated == null) throw new System.Exception("DEVELOPER_GUIDE.md has no SKILLS:BEGIN/END markers");
+            System.IO.File.WriteAllText(path, updated);
+            Debug.Log("AgentWorld: skill docs updated in " + path);
+        }
+
         // --- Helpers -------------------------------------------------------------
 
         static GameObject MakeCharacter(string name, Sprite sprite, bool player)

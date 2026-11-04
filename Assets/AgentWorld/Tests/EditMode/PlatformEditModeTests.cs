@@ -15,7 +15,7 @@ namespace AgentWorld.Tests
         public void Registry_HasRealExecutorsForEveryBuiltInSkill()
         {
             var ids = SkillRegistry.All.Select(s => s.Id).ToList();
-            CollectionAssert.AreEquivalent(new[] { "move_to", "inspect", "report_findings", "build_house", "build_farm", "speak", "wait" }, ids);
+            CollectionAssert.AreEquivalent(new[] { "move_to", "inspect", "report_findings", "build_house", "build_farm", "speak", "wait", "count_people" }, ids);
             foreach (var s in SkillRegistry.All)
             {
                 Assert.IsNotNull(s.Execute, s.Id);

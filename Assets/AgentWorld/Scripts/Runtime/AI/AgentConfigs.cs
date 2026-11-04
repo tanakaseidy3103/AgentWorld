@@ -42,7 +42,7 @@ namespace AgentWorld
                     skills = { "move_to", "inspect", "speak", "wait" } },
                 new AgentConfig { id = "grace", role = "explorer", title = "Explorer",
                     personality = "curious and observant; loves describing what is around",
-                    skills = { "move_to", "inspect", "report_findings", "speak", "wait" } },
+                    skills = { "move_to", "inspect", "report_findings", "count_people", "speak", "wait" } },
                 new AgentConfig { id = "linus", role = "builder", title = "Builder",
                     personality = "practical, cheerful and proud of solid work; speaks briefly",
                     skills = { "move_to", "inspect", "build_house", "build_farm", "speak", "wait" } },
