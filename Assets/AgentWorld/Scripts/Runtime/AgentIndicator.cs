@@ -18,7 +18,7 @@ namespace AgentWorld
             baseScale = transform.localScale;
             var go = new GameObject("TaskIcon");
             go.transform.SetParent(transform, false);
-            go.transform.localPosition = new Vector3(0, 1.45f, 0);
+            go.transform.localPosition = new Vector3(0.7f, 0.95f, 0);
             icon = go.AddComponent<SpriteRenderer>();
             icon.sortingOrder = 50;
         }
@@ -35,7 +35,7 @@ namespace AgentWorld
             icon.sprite = RuntimeArt.Icon(name);
 
             var t = Time.time;
-            icon.transform.localPosition = new Vector3(0, 1.45f + Mathf.Sin(t * 4f) * 0.06f, 0);
+            icon.transform.localPosition = new Vector3(0.7f, 0.95f + Mathf.Sin(t * 4f) * 0.06f, 0);
             var hammering = name == "build";
             icon.transform.localRotation = Quaternion.Euler(0, 0, hammering ? Mathf.Sin(t * 14f) * 35f : 0f);
             // Linus visibly works: a quick squash in rhythm with the hammer.

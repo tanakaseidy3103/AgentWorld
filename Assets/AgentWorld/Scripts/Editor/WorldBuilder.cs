@@ -107,7 +107,7 @@ namespace AgentWorld.EditorTools
             for (var i = 0; i < Npcs.Length; i++)
             {
                 var n = Npcs[i];
-                go = MakeCharacter("Npc_" + n.name, CharSprite("npc_" + n.id, n.shirt, n.hair), false);
+                go = MakeCharacter("Npc_" + n.name, CharSprite("npc_" + n.id, n.shirt, n.hair, n.ai == "builder" ? "hardhat" : n.ai == "explorer" ? "explorer" : "headset"), false);
                 Shadow(go, shadow, 0.8f);
                 var agent = go.AddComponent<NpcAgent>();
                 agent.id = n.id; agent.displayName = n.name; agent.role = n.role; agent.agentRole = n.ai; agent.lines = n.lines;
@@ -350,12 +350,39 @@ namespace AgentWorld.EditorTools
             });
         }
 
-        static Sprite CharSprite(string name, Color32 shirt, Color32 hair) =>
-            MakeSprite(name, FromMap(CharacterMap, new Dictionary<char, Color32>
+        static Sprite CharSprite(string name, Color32 shirt, Color32 hair, string gear = null)
+        {
+            var tex = FromMap(CharacterMap, new Dictionary<char, Color32>
             {
                 ['o'] = C(40, 30, 30), ['h'] = hair, ['s'] = C(240, 200, 160), ['e'] = C(30, 30, 40),
                 ['c'] = shirt, ['p'] = C(50, 60, 90), ['b'] = C(60, 40, 30),
-            }), Feet);
+            });
+            Gear(tex, gear);
+            return MakeSprite(name, tex, Feet);
+        }
+
+        /// Role gear so the three agents read differently at a glance (y=15 is the top row).
+        static void Gear(Texture2D t, string gear)
+        {
+            void Px(int x, int y, Color32 c) => t.SetPixel(x, y, c);
+            switch (gear)
+            {
+                case "hardhat": // Linus, builder
+                    for (var x = 4; x <= 11; x++) { Px(x, 15, C(250, 200, 40)); Px(x, 14, C(235, 180, 30)); }
+                    for (var x = 3; x <= 12; x++) Px(x, 13, C(200, 150, 20));
+                    break;
+                case "explorer": // Grace, explorer
+                    for (var x = 5; x <= 10; x++) { Px(x, 15, C(150, 120, 70)); Px(x, 14, C(120, 95, 55)); }
+                    for (var x = 2; x <= 13; x++) Px(x, 13, C(170, 140, 85));
+                    break;
+                case "headset": // Ada, coordinator
+                    for (var x = 4; x <= 11; x++) Px(x, 15, C(45, 45, 55));
+                    Px(3, 11, C(60, 60, 75)); Px(3, 10, C(60, 60, 75)); Px(12, 11, C(60, 60, 75)); Px(12, 10, C(60, 60, 75));
+                    Px(13, 10, C(60, 60, 75)); Px(13, 9, C(120, 230, 160));
+                    break;
+            }
+            t.Apply();
+        }
 
         static readonly string[] CharacterMap =
         {

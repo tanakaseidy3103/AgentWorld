@@ -121,13 +121,72 @@ namespace AgentWorld
         {
             var cam = Camera.main;
             if (cam == null) return;
-            var p = cam.WorldToScreenPoint(transform.position + Vector3.up * 1.2f);
+            var p = cam.WorldToScreenPoint(transform.position + Vector3.up * 1.15f);
             if (p.z < 0) return;
-            var y = Screen.height - p.y;
-            var label = Ai == null ? displayName : $"{displayName} [{agentRole}]\n{Ai.Status} {Ai.Detail}";
-            GUI.Label(new Rect(p.x - 90, y - (Ai == null ? 0 : 16), 180, 36), label, new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold });
+            var size = Mathf.Max(13, TerminalUI.FontSize(Screen.height) * 3 / 4);
+            if (size != labelSize) BuildLabelStyles(size);
+
+            // Name plate under the feet-anchored sprite's head: "Ada — Coordinator" + live activity word.
+            var name = Ai == null ? displayName : $"{displayName} — {RoleTitle}";
+            var w = nameStyle.CalcSize(new GUIContent(name)).x + size;
+            var top = Screen.height - p.y - size * (Ai == null ? 1.6f : 2.7f);
+            GUI.Box(new Rect(p.x - w / 2, top, w, size * 1.5f), name, nameStyle);
+            if (Ai != null)
+            {
+                var activity = Activity;
+                var aw = activityStyle.CalcSize(new GUIContent(activity)).x + size * 0.8f;
+                GUI.Box(new Rect(p.x - aw / 2, top + size * 1.5f, aw, size * 1.2f), activity, activityStyle);
+            }
             if (Time.time < speechUntil)
-                GUI.Box(new Rect(p.x - 140, y - 62, 280, 44), Speech, new GUIStyle(GUI.skin.box) { wordWrap = true });
+            {
+                var bw = size * 18f;
+                var bh = bubbleStyle.CalcHeight(new GUIContent(Speech), bw);
+                GUI.Box(new Rect(p.x - bw / 2, top - bh - size * 0.3f, bw, bh), Speech, bubbleStyle);
+            }
+        }
+
+        public string RoleTitle => agentRole switch { "assistant" => "Coordinator", "explorer" => "Explorer", "builder" => "Builder", _ => role };
+
+        /// One-word activity derived only from the brain's real state (no decorative states).
+        public string Activity
+        {
+            get
+            {
+                var ai = Ai;
+                if (ai == null) return "";
+                switch (ai.Status)
+                {
+                    case AgentStatus.Thinking:
+                    case AgentStatus.Planning: return "Planning";
+                    case AgentStatus.Moving: return agentRole == "explorer" ? "Exploring" : "Moving";
+                    case AgentStatus.Acting:
+                        if (ai.Detail.StartsWith("construindo")) return "Building";
+                        if (ai.Detail.StartsWith("inspecionando")) return "Exploring";
+                        if (ai.Detail.StartsWith("falando")) return "Talking";
+                        if (ai.Detail.StartsWith("esperando")) return "Waiting";
+                        return "Acting";
+                    case AgentStatus.Failed: return "Failed";
+                    case AgentStatus.Cancelled: return "Cancelled";
+                    default:
+                        if (Time.time < speechUntil) return "Talking";
+                        return ai.Detail != "" && MissionControl.Running ? "Waiting" : "Idle";
+                }
+            }
+        }
+
+        int labelSize = -1;
+        GUIStyle nameStyle, activityStyle, bubbleStyle;
+
+        void BuildLabelStyles(int size)
+        {
+            labelSize = size;
+            Texture2D Bg(Color c) { var t = new Texture2D(1, 1); t.SetPixel(0, 0, c); t.Apply(); return t; }
+            nameStyle = new GUIStyle { fontSize = size, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = Color.white, background = Bg(new Color(0.05f, 0.06f, 0.08f, 0.78f)) } };
+            activityStyle = new GUIStyle { fontSize = size * 4 / 5, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = new Color(1f, 0.85f, 0.35f), background = Bg(new Color(0.05f, 0.06f, 0.08f, 0.6f)) } };
+            bubbleStyle = new GUIStyle { fontSize = size * 4 / 5, wordWrap = true, alignment = TextAnchor.MiddleCenter, padding = new RectOffset(size / 2, size / 2, size / 3, size / 3),
+                normal = { textColor = new Color(0.1f, 0.1f, 0.12f), background = Bg(new Color(1f, 0.98f, 0.92f, 0.95f)) } };
         }
     }
 }

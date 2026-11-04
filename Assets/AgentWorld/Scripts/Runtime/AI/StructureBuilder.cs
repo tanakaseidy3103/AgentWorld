@@ -107,6 +107,7 @@ namespace AgentWorld
             go.transform.localScale = Vector3.one;
             if (sr) sr.color = Color.white;
             if (col) col.enabled = true;
+            for (var i = 0; i < 10; i++) FxPuff.Spawn(site + new Vector2(UnityEngine.Random.Range(-1.4f, 1.4f), UnityEngine.Random.Range(0.2f, 2f))); // completion burst
             progress?.Invoke(1f);
             return Register(go, id, type, builder);
         }
